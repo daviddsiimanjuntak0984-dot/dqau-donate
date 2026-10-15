@@ -100,7 +100,7 @@ function updateAccount(user) {
 }
 
 try {
-  if (SUPABASE_PUBLISHABLE_KEY === 'sb_publishable_C8lsHHp3ftQJZH-rRM9gow_F4pkk1Vl') {
+  if (!SUPABASE_PUBLISHABLE_KEY || SUPABASE_PUBLISHABLE_KEY === 'TEMPEL_PUBLISHABLE_KEY_DI_SINI') {
     accountButton.addEventListener('click', () => alert('Pengaturan belum selesai. Tempel Publishable key Supabase pada baris yang ditandai di file index.html, lalu simpan.'));
     document.querySelectorAll('.profileButton,.supportButton').forEach(button => button.addEventListener('click', () => alert('Fitur profil dan donasi belum aktif.')));
   } else {
