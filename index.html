@@ -197,7 +197,7 @@ document.querySelectorAll('[data-provider]').forEach(button => {
 document.getElementById('sendPhoneCode').addEventListener('click', async () => {
   if (!supabase) { showMessage('Koneksi Supabase belum siap. Muat ulang halaman.', true); return; }
   const phone = document.getElementById('phoneNumber').value.trim();
-  if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) { showMessage('Gunakan format internasional, misalnya +62812xxxxxxxx.', true); return; }
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) { showMessage('Gunakan format internasional, misalnya +62812xxxxxxxx.', true); return; }
   const button = document.getElementById('sendPhoneCode');
   button.disabled = true;
   showMessage('Mengirim kode SMS...');
