@@ -207,7 +207,17 @@ async function render() {
   root.innerHTML = `<h2 class="section-title">Komunitas</h2><nav class="tabs"><button data-go="feed">Beranda</button><button data-go="albums">Album</button><button data-go="profile">Profil saya</button></nav><p id="msg" class="message" role="status"></p><div id="view">Memuat...</div>`;
   root.querySelectorAll('[data-go]').forEach(b => (b.onclick = () => go(b.dataset.go)));
   if (note) { say(note.m, note.e); note = null; }
-  try { await views[view.name]($('#view')); } catch (e) { $('#view').innerHTML = ''; fail(e); }
+  // Ikat hasil async/error ke tampilan yang memulai render, bukan tab yang datang sesudahnya.
+  const target = $('#view');
+  const targetView = view;
+  try {
+    await views[targetView.name](target);
+  } catch (e) {
+    if (target.isConnected && $('#view') === target) {
+      target.innerHTML = '';
+      fail(e);
+    }
+  }
 }
 
 async function loadCreators() {
