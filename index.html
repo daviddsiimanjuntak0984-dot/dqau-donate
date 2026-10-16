@@ -60,6 +60,7 @@
       <label for="password">Kata sandi (minimal 6 karakter)</label><input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Minimal 6 karakter">
       <p class="message" id="authMessage" role="status"></p>
       <div class="actions"><button type="submit" id="submitAuth">Masuk</button><button type="button" class="secondary" id="switchMode">Buat akun</button></div>
+      <div class="actions"><button type="button" class="secondary" id="resendConfirmation" hidden>Kirim ulang email konfirmasi</button></div>
     </form>
     <div class="social-auth">
       <div class="or-divider">atau lanjutkan dengan</div>
@@ -112,6 +113,7 @@ function updateMode() {
   submitAuth.textContent = registering ? 'Daftar' : 'Masuk';
   switchMode.textContent = registering ? 'Saya sudah punya akun' : 'Buat akun';
   document.getElementById('password').autocomplete = registering ? 'new-password' : 'current-password';
+  document.getElementById('resendConfirmation').hidden = true;
   showMessage('');
 }
 function openModal() {
@@ -161,7 +163,8 @@ try {
         else result = await supabase.auth.signInWithPassword({ email, password });
         if (result.error) throw result.error;
         if (mode === 'signup' && !result.data.session) {
-          showMessage('Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.');
+          document.getElementById('resendConfirmation').hidden = false;
+          showMessage('Akun dibuat. Periksa email untuk konfirmasi. Jika tautan lama membuka localhost, perbaiki URL Auth terlebih dahulu lalu kirim ulang email konfirmasi.');
         } else {
           showMessage(mode === 'signup' ? 'Akun berhasil dibuat dan kamu sudah masuk.' : 'Berhasil masuk.');
           setTimeout(closeModal, 900);
@@ -171,6 +174,27 @@ try {
       } finally {
         submitAuth.disabled = false;
         switchMode.disabled = false;
+      }
+    });
+
+    document.getElementById('resendConfirmation').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      if (!email) { showMessage('Masukkan email akun terlebih dahulu.', true); return; }
+      const button = document.getElementById('resendConfirmation');
+      button.disabled = true;
+      showMessage('Mengirim ulang email konfirmasi...');
+      try {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: { emailRedirectTo: window.location.origin }
+        });
+        if (error) throw error;
+        showMessage('Email konfirmasi baru diminta. Buka email terbaru dan gunakan tautan yang paling baru.');
+      } catch (error) {
+        showMessage(error.message || 'Gagal mengirim ulang email konfirmasi.', true);
+      } finally {
+        button.disabled = false;
       }
     });
   }
