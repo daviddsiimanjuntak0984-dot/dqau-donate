@@ -19,8 +19,8 @@ Platform komunitas kreator dengan login, profil, postingan, foto, like, komentar
 - Chat, notifikasi/follow, alert donasi, dan OBS overlay: belum diimplementasikan; lihat `docs/ROADMAP.md`.
 
 ## Penyebaran dan pengujian
-1. Pastikan Cloudflare Pages membuat Preview Deployment untuk branch `staging/finish-foundation-2026-10-16`. Jangan merge ke `main` sebelum pengujian.
-2. Supabase Auth > URL Configuration: tambahkan URL preview Cloudflare yang sebenarnya setelah tersedia. Jangan tebak URL.
+1. Preview Deployment branch tersedia: https://staging-finish-foundation-20.dqau-donate.pages.dev (deployment commit saat review: https://f8b09af3.dqau-donate.pages.dev). Jangan merge ke `main` sebelum pengujian.
+2. Di Supabase staging > Authentication > URL Configuration, tambahkan `https://staging-finish-foundation-20.dqau-donate.pages.dev/**` ke Redirect URLs. Biarkan Site URL produksi tidak berubah.
 3. Uji pendaftaran/login, logout, profil, buat/hapus postingan, foto, like (termasuk unlike), komentar, album, upload dan hapus foto, serta uji izin menggunakan dua akun.
 4. Pastikan anonymous user bisa membaca konten yang ditujukan publik tetapi tidak bisa menulis. Pastikan user B tidak bisa menghapus atau mengubah data milik user A.
 5. Jangan memasukkan service-role key, OAuth client secret, atau payment secret ke frontend/repository.
@@ -29,7 +29,7 @@ Platform komunitas kreator dengan login, profil, postingan, foto, like, komentar
 - Jangan hapus akun yang memiliki media publik langsung dari Supabase Auth Dashboard: penghapusan Auth biasa tidak menghapus objek di Storage.
 - Sumber fungsi aman ada di **supabase/functions/admin-delete-user/index.ts**. Fungsi menghapus semua objek pada folder **media/<user_id>/** terlebih dahulu, lalu menghapus akun Auth sehingga relasi database mengikuti aturan cascade.
 - Fungsi hanya menerima POST dengan sesi valid dan memeriksa **app_metadata.role = admin** (metadata yang hanya boleh ditetapkan server/admin). Fungsi menolak penghapusan akun admin yang sedang dipakai. Jangan pernah menggunakan **user_metadata** untuk izin admin.
-- Sebelum dipakai, deploy fungsi ke project staging, tetapkan role admin melalui proses server tepercaya, lalu uji menggunakan akun uji yang berisi media. Jika pembersihan Storage gagal, fungsi tidak akan menghapus akun.
+- Fungsi sudah dideploy ke project staging dengan JWT verification aktif. Sebelum dipakai untuk penghapusan akun, tetapkan role admin melalui proses server tepercaya, lalu uji menggunakan akun uji yang berisi media. Jika pembersihan Storage gagal, fungsi tidak akan menghapus akun.
 
 ## Catatan keamanan
 - RLS aktif pada `profiles`, `posts`, `likes`, `comments`, `albums`, `photos`, dan `donations`.
