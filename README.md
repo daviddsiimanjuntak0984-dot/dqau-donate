@@ -27,7 +27,7 @@ Platform komunitas kreator dengan login, profil, postingan, foto, like, komentar
      - `https://staging-finish-foundation-20.dqau-donate.pages.dev/**`
      - `https://*.dqau-donate.pages.dev/**` (untuk preview commit Cloudflare)
    - Di **Authentication > Email Templates > Confirm signup**, pastikan tombol menggunakan `{{ .ConfirmationURL }}`. Bila template membangun URL sendiri menggunakan `{{ .SiteURL }}`, ganti target redirect-nya dengan `{{ .RedirectTo }}`.
-   - Project produksi terpisah: ([URL Configuration production](https://supabase.com/dashboard/project/aaqfamoedywfjidwupou/auth/url-configuration)) Site URL tetap `https://dqau-donate.pages.dev`; jangan ubah production menjadi staging.
+   - Project produksi terpisah: ([URL Configuration production](https://supabase.com/dashboard/project/aaqfamoedywfjidwupou/auth/url-configuration)) Site URL = `https://dqau-donate.pages.dev`; Redirect URLs mencakup `https://dqau-donate.pages.dev` dan `https://dqau-donate.pages.dev/**`. Jangan ubah production menjadi staging.
 3. Uji pendaftaran/login, logout, profil, buat/hapus postingan, foto, like (termasuk unlike), komentar, album, upload dan hapus foto, serta uji izin menggunakan dua akun.
 4. Pastikan anonymous user bisa membaca konten yang ditujukan publik tetapi tidak bisa menulis. Pastikan user B tidak bisa menghapus atau mengubah data milik user A.
 5. Jangan memasukkan service-role key, OAuth client secret, atau payment secret ke frontend/repository.
