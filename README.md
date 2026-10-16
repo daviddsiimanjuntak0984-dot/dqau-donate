@@ -19,7 +19,7 @@ Platform komunitas kreator dengan login, profil, postingan, foto, like, komentar
 - Chat, notifikasi/follow, alert donasi, dan OBS overlay: belum diimplementasikan; lihat `docs/ROADMAP.md`.
 
 ## Penyebaran dan pengujian
-1. Preview Deployment branch tersedia: https://staging-finish-foundation-20.dqau-donate.pages.dev (deployment commit saat review: https://f8b09af3.dqau-donate.pages.dev). Jangan merge ke `main` sebelum pengujian.
+1. Preview Deployment branch tersedia: https://staging-finish-foundation-20.dqau-donate.pages.dev. URL preview unik per commit ditampilkan oleh bot Cloudflare di komentar PR. Jangan merge ke `main` sebelum pengujian.
 2. **Wajib diperbaiki pada dashboard Supabase staging** ([URL Configuration](https://supabase.com/dashboard/project/wztmgafrtxecvxzibzaq/auth/url-configuration)):
    - Site URL = `https://staging-finish-foundation-20.dqau-donate.pages.dev`
    - Tambahkan ke Redirect URLs:
