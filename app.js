@@ -24,6 +24,21 @@ async function rmFiles(paths) {
   const { error } = await sb.storage.from('media').remove(paths);
   if (error) { note = { e: true, m: `Data dihapus, tetapi ${paths.length} file gagal dihapus dari penyimpanan (${error.message}). Lihat README: file yatim.` }; say(note.m, true); }
 }
+// Jika simpan metadata gagal setelah upload berhasil, file sementara wajib dibersihkan.
+// Bila pembersihan juga gagal, laporkan kedua masalah agar file publik yang tertinggal tidak tersembunyi.
+async function rollbackUpload(path, cause) {
+  if (path) {
+    try {
+      const { error } = await sb.storage.from('media').remove([path]);
+      if (error) throw error;
+    } catch (cleanupError) {
+      const original = cause?.message || 'Data gagal disimpan.';
+      const cleanup = cleanupError?.message || 'kesalahan Storage tidak diketahui';
+      throw new Error(`${original} Selain itu, file yang terunggah gagal dibersihkan dari penyimpanan: ${cleanup}. Jangan unggah ulang sebelum memeriksa Storage.`);
+    }
+  }
+  throw cause instanceof Error ? cause : new Error('Data gagal disimpan.');
+}
 
 async function upload(file, kind) {
   if (!file || !file.size) return null;
@@ -46,11 +61,13 @@ async function showPosts(el, authorId) {
   let q = sb.from('posts').select(POST_SEL).order('created_at', { ascending: false }).limit(30);
   if (authorId) q = q.eq('author_id', authorId);
   const { data, error } = await q; if (error) throw error;
+  if (!el.isConnected) return;
   let liked = new Set();
   if (me && data.length) {
     const r = await sb.from('likes').select('post_id').eq('user_id', me.id).in('post_id', data.map(p => p.id));
     liked = new Set((r.data || []).map(x => x.post_id));
   }
+  if (!el.isConnected) return;
   el.innerHTML = data.length ? data.map(p => `<article class="card post" data-id="${p.id}">
     <button class="link" data-user="${p.author_id}">${name(p.author)}</button> <span class="tag">${when(p.created_at)}</span>
     <p style="white-space:pre-wrap;color:#fff">${esc(p.body)}</p>${p.image_path ? `<img loading="lazy" alt="Foto postingan" src="${esc(pub(p.image_path))}">` : ''}
@@ -86,6 +103,7 @@ async function showComments(el, postId) {
   if (el.innerHTML) { el.innerHTML = ''; return; }
   const { data, error } = await sb.from('comments').select('id,body,created_at,author_id,author:profiles(username,display_name)').eq('post_id', postId).order('created_at').limit(100);
   if (error) throw error;
+  if (!el.isConnected) return;
   el.innerHTML = data.map(c => `<p data-c="${c.id}"><b>${name(c.author)}</b>: <span style="color:#fff">${esc(c.body)}</span>${me?.id === c.author_id ? ' <button class="link" data-dc>hapus</button>' : ''}</p>`).join('') +
     `<form class="f"><input name="body" maxlength="500" required placeholder="Tulis komentar..."><button class="mini" type="submit">Kirim</button></form>`;
   el.onclick = async e => {
@@ -114,7 +132,7 @@ const views = {
         say('Mengirim...');
         const image_path = await upload(f.img.files[0], 'posts');
         const { error } = await sb.from('posts').insert({ body, image_path });
-        if (error) { if (image_path) await sb.storage.from('media').remove([image_path]); throw error; }
+        if (error) await rollbackUpload(image_path, error);
         note = { m: 'Terkirim.' }; await render();
       });
     };
@@ -167,24 +185,28 @@ const views = {
       await guarded(f, async () => { const { error } = await sb.from('albums').insert({ title: f.t.value.trim() }); if (error) throw error; await render(); });
     };
     const { data, error } = await sb.from('albums').select('id,title,owner:profiles(username,display_name),photos(count)').order('created_at', { ascending: false }).limit(30); if (error) throw error;
-    const l = $('#list'); l.innerHTML = data.length ? data.map(a => `<article class="card"><h3>${esc(a.title)}</h3><span class="tag">${name(a.owner)} · ${a.photos[0].count} foto</span><div class="row"><button class="mini" data-a="${a.id}">Buka</button></div></article>`).join('') : '<p>Belum ada album.</p>';
+    if (!v.isConnected || $('#view') !== v) return;
+    const l = $('#list', v); l.innerHTML = data.length ? data.map(a => `<article class="card"><h3>${esc(a.title)}</h3><span class="tag">${name(a.owner)} · ${a.photos[0].count} foto</span><div class="row"><button class="mini" data-a="${a.id}">Buka</button></div></article>`).join('') : '<p>Belum ada album.</p>';
     l.onclick = e => { const b = e.target.closest('[data-a]'); if (b) go('albums', b.dataset.a); };
   },
   async album(v) {
-    const { data: a, error } = await sb.from('albums').select('id,title,owner_id,owner:profiles(username,display_name)').eq('id', view.id).single(); if (error) throw error;
+    const requestedAlbumId = view.id;
+    const { data: a, error } = await sb.from('albums').select('id,title,owner_id,owner:profiles(username,display_name)').eq('id', requestedAlbumId).single(); if (error) throw error;
+    if (!v.isConnected || $('#view') !== v || view.id !== requestedAlbumId) return;
     const own = me?.id === a.owner_id;
     v.innerHTML = `<button class="mini secondary" id="back">← Semua album</button><h3>${esc(a.title)}</h3><span class="tag">${name(a.owner)}</span>` +
       (own ? `<form class="f card" id="uf"><input type="file" name="img" accept="image/jpeg,image/png,image/webp" required><input name="cap" maxlength="200" placeholder="Keterangan (opsional)"><button type="submit">Unggah foto</button></form><button class="mini secondary" id="dalb">Hapus album</button>` : '') + '<div class="grid" id="g"></div>';
     $('#back').onclick = () => go('albums');
     const { data: ph, error: e2 } = await sb.from('photos').select('id,path,caption').eq('album_id', a.id).order('created_at', { ascending: false }).limit(100); if (e2) throw e2;
-    $('#g').innerHTML = ph.map(p => `<figure style="margin:0" data-p="${p.id}"><img loading="lazy" alt="${esc(p.caption) || 'Foto album'}" src="${esc(pub(p.path))}"><figcaption class="tag">${esc(p.caption)}${own ? ' <button class="link" data-dp>hapus</button>' : ''}</figcaption></figure>`).join('') || '<p>Album masih kosong.</p>';
+    if (!v.isConnected || $('#view') !== v || view.id !== requestedAlbumId) return;
+    $('#g', v).innerHTML = ph.map(p => `<figure style="margin:0" data-p="${p.id}"><img loading="lazy" alt="${esc(p.caption) || 'Foto album'}" src="${esc(pub(p.path))}"><figcaption class="tag">${esc(p.caption)}${own ? ' <button class="link" data-dp>hapus</button>' : ''}</figcaption></figure>`).join('') || '<p>Album masih kosong.</p>';
     if (!own) return;
     $('#uf').onsubmit = async e => {
       e.preventDefault(); const f = e.target;
       await guarded(f, async () => {
         say('Mengunggah...'); const path = await upload(f.img.files[0], 'photos');
         const { error } = await sb.from('photos').insert({ album_id: a.id, path, caption: f.cap.value.trim() });
-        if (error) { await sb.storage.from('media').remove([path]); throw error; }
+        if (error) await rollbackUpload(path, error);
         note = { m: 'Foto ditambahkan.' }; await render();
       });
     };
