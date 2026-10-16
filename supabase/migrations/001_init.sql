@@ -161,5 +161,4 @@ grant insert (album_id, path, caption) on public.photos to authenticated;
 grant delete on public.posts, public.likes, public.comments, public.albums, public.photos to authenticated;
 revoke execute on function public.handle_new_user(), public.limit_rate() from public, anon, authenticated;
 
--- Security hardening: prevent direct API/RPC execution of existing event-trigger helper.
-revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+-- `rls_auto_enable()` is intentionally not referenced: this migration does not define that helper.
