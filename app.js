@@ -123,6 +123,8 @@ const views = {
   async profile(v) {
     const id = view.id || me?.id; if (!id) { v.innerHTML = '<p>Masuk untuk melihat profilmu.</p>'; return; }
     const { data: p, error } = await sb.from('profiles').select('*').eq('id', id).single(); if (error) throw error;
+    // Abaikan hasil lama jika pengguna sudah berpindah tampilan saat permintaan berjalan.
+    if (!v.isConnected || $('#view') !== v) return;
     const own = me?.id === id;
     v.innerHTML = `<div class="card"><h3>${name(p)}</h3><span class="tag">@${esc(p.username)}</span><p>${esc(p.bio) || 'Belum ada bio.'}</p></div>`;
     if (own) {
@@ -155,7 +157,7 @@ const views = {
       };
     }
     v.insertAdjacentHTML('beforeend', '<h3>Postingan</h3><div class="stack" id="list"></div>');
-    await showPosts($('#list'), id);
+    await showPosts($('#list', v), id);
   },
   async albums(v) {
     if (view.id) return views.album(v);
