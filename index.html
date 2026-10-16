@@ -113,7 +113,7 @@ function updateMode() {
   submitAuth.textContent = registering ? 'Daftar' : 'Masuk';
   switchMode.textContent = registering ? 'Saya sudah punya akun' : 'Buat akun';
   document.getElementById('password').autocomplete = registering ? 'new-password' : 'current-password';
-  document.getElementById('resendConfirmation').hidden = true;
+  document.getElementById('resendConfirmation').hidden = !registering;
   showMessage('');
 }
 function openModal() {
