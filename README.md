@@ -20,10 +20,22 @@ Platform komunitas kreator dengan login, profil, postingan, foto, like, komentar
 
 ## Penyebaran dan pengujian
 1. Preview Deployment branch tersedia: https://staging-finish-foundation-20.dqau-donate.pages.dev (deployment commit saat review: https://f8b09af3.dqau-donate.pages.dev). Jangan merge ke `main` sebelum pengujian.
-2. Di Supabase staging > Authentication > URL Configuration, tambahkan `https://staging-finish-foundation-20.dqau-donate.pages.dev/**` ke Redirect URLs. Biarkan Site URL produksi tidak berubah.
+2. **Wajib diperbaiki pada dashboard Supabase staging** ([URL Configuration](https://supabase.com/dashboard/project/wztmgafrtxecvxzibzaq/auth/url-configuration)):
+   - Site URL = `https://staging-finish-foundation-20.dqau-donate.pages.dev`
+   - Tambahkan ke Redirect URLs:
+     - `https://staging-finish-foundation-20.dqau-donate.pages.dev`
+     - `https://staging-finish-foundation-20.dqau-donate.pages.dev/**`
+     - `https://*.dqau-donate.pages.dev/**` (untuk preview commit Cloudflare)
+   - Di **Authentication > Email Templates > Confirm signup**, pastikan tombol menggunakan `{{ .ConfirmationURL }}`. Bila template membangun URL sendiri menggunakan `{{ .SiteURL }}`, ganti target redirect-nya dengan `{{ .RedirectTo }}`.
+   - Project produksi terpisah: ([URL Configuration production](https://supabase.com/dashboard/project/aaqfamoedywfjidwupou/auth/url-configuration)) Site URL tetap `https://dqau-donate.pages.dev`; jangan ubah production menjadi staging.
 3. Uji pendaftaran/login, logout, profil, buat/hapus postingan, foto, like (termasuk unlike), komentar, album, upload dan hapus foto, serta uji izin menggunakan dua akun.
 4. Pastikan anonymous user bisa membaca konten yang ditujukan publik tetapi tidak bisa menulis. Pastikan user B tidak bisa menghapus atau mengubah data milik user A.
 5. Jangan memasukkan service-role key, OAuth client secret, atau payment secret ke frontend/repository.
+
+### Memulihkan konfirmasi akun
+- Jika tautan konfirmasi yang lama mengarah ke localhost, jangan gunakan tautan tersebut lagi karena targetnya sudah tertanam pada email lama.
+- Setelah Redirect URLs/template staging diperbaiki, buka branch preview, klik **Masuk / Daftar > Buat akun**, masukkan email yang sama, lalu klik **Kirim ulang email konfirmasi**. Gunakan email terbaru.
+- Kode frontend meminta `emailRedirectTo: window.location.origin` saat sign-up dan resend. Fungsi resend telah ditambahkan ke modal; pengaturan allowlist dan template di atas tetap diperlukan.
 
 ### Penghapusan akun admin dan media
 - Jangan hapus akun yang memiliki media publik langsung dari Supabase Auth Dashboard: penghapusan Auth biasa tidak menghapus objek di Storage.
