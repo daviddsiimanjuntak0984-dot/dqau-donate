@@ -56,7 +56,7 @@ async function guarded(form, fn) {
   try { await fn(); } catch (e) { fail(e); } finally { if (b) b.disabled = false; }
 }
 
-const POST_SEL = 'id,body,image_path,created_at,author_id,author:profiles(username,display_name),likes(count),comments(count)';
+const POST_SEL = 'id,body,image_path,created_at,author_id,author:profiles!posts_author_id_fkey(username,display_name),likes(count),comments(count)';
 async function showPosts(el, authorId) {
   let q = sb.from('posts').select(POST_SEL).order('created_at', { ascending: false }).limit(30);
   if (authorId) q = q.eq('author_id', authorId);
@@ -101,7 +101,7 @@ async function showPosts(el, authorId) {
 
 async function showComments(el, postId) {
   if (el.innerHTML) { el.innerHTML = ''; return; }
-  const { data, error } = await sb.from('comments').select('id,body,created_at,author_id,author:profiles(username,display_name)').eq('post_id', postId).order('created_at').limit(100);
+  const { data, error } = await sb.from('comments').select('id,body,created_at,author_id,author:profiles!comments_author_id_fkey(username,display_name)').eq('post_id', postId).order('created_at').limit(100);
   if (error) throw error;
   if (!el.isConnected) return;
   el.innerHTML = data.map(c => `<p data-c="${c.id}"><b>${name(c.author)}</b>: <span style="color:#fff">${esc(c.body)}</span>${me?.id === c.author_id ? ' <button class="link" data-dc>hapus</button>' : ''}</p>`).join('') +
@@ -184,14 +184,14 @@ const views = {
       e.preventDefault(); if (!loggedIn()) return; const f = e.target;
       await guarded(f, async () => { const { error } = await sb.from('albums').insert({ title: f.t.value.trim() }); if (error) throw error; await render(); });
     };
-    const { data, error } = await sb.from('albums').select('id,title,owner:profiles(username,display_name),photos(count)').order('created_at', { ascending: false }).limit(30); if (error) throw error;
+    const { data, error } = await sb.from('albums').select('id,title,owner:profiles!albums_owner_id_fkey(username,display_name),photos(count)').order('created_at', { ascending: false }).limit(30); if (error) throw error;
     if (!v.isConnected || $('#view') !== v) return;
     const l = $('#list', v); l.innerHTML = data.length ? data.map(a => `<article class="card"><h3>${esc(a.title)}</h3><span class="tag">${name(a.owner)} · ${a.photos[0].count} foto</span><div class="row"><button class="mini" data-a="${a.id}">Buka</button></div></article>`).join('') : '<p>Belum ada album.</p>';
     l.onclick = e => { const b = e.target.closest('[data-a]'); if (b) go('albums', b.dataset.a); };
   },
   async album(v) {
     const requestedAlbumId = view.id;
-    const { data: a, error } = await sb.from('albums').select('id,title,owner_id,owner:profiles(username,display_name)').eq('id', requestedAlbumId).single(); if (error) throw error;
+    const { data: a, error } = await sb.from('albums').select('id,title,owner_id,owner:profiles!albums_owner_id_fkey(username,display_name)').eq('id', requestedAlbumId).single(); if (error) throw error;
     if (!v.isConnected || $('#view') !== v || view.id !== requestedAlbumId) return;
     const own = me?.id === a.owner_id;
     v.innerHTML = `<button class="mini secondary" id="back">← Semua album</button><h3>${esc(a.title)}</h3><span class="tag">${name(a.owner)}</span>` +
