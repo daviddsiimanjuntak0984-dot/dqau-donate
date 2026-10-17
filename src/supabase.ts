@@ -4,6 +4,9 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const missingEnvVars: string[] = [];
+if (!SUPABASE_URL) missingEnvVars.push('VITE_SUPABASE_URL');
+if (!SUPABASE_ANON_KEY) missingEnvVars.push('VITE_SUPABASE_ANON_KEY');
 
 if (!isSupabaseConfigured) {
   // Keep the public UI renderable when deployment variables are missing.
