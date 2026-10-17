@@ -347,3 +347,14 @@ footer {
   font-size: 14px;
   margin: 12px 0 20px;
 }
+
+
+.profile-editor { margin:24px 0; padding:22px; border:1px solid var(--line); border-radius:18px; background:var(--panel); }
+.profile-editor h3 { margin:0 0 6px; }
+.profile-editor form { display:grid; gap:9px; }
+.profile-editor label { font-size:13px; color:#ddd3f5; margin-top:6px; }
+.profile-editor input, .profile-editor textarea { width:100%; padding:12px; border-radius:10px; border:1px solid #514369; background:#100d1a; color:#fff; font:inherit; resize:vertical; }
+.profile-editor input:focus, .profile-editor textarea:focus { outline:1px solid var(--purple); }
+.profile-editor form button { margin-top:8px; }
+.creator-avatar-image { width:64px; height:64px; border-radius:18px; object-fit:cover; background:#39265c; margin-bottom:12px; border:1px solid var(--line); }
+.profile-detail-avatar { display:block; width:88px; height:88px; margin:0 auto 12px; }
