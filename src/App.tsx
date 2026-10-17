@@ -501,36 +501,61 @@ export function App() {
   return (
     <>
       {entranceVisible && <div className="entrance-overlay" role="status" aria-label="Dqau Donate sedang dibuka"><div className="entrance-mark">✦</div><strong>Dqau Donate</strong><span>Ruang untuk para kreator</span></div>}
-      <header>
-        <div className="logo">✦ Dqau Donate</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span className="account" id="accountStatus">
-            {user ? user.email || 'Sudah masuk' : 'Belum masuk'}
-          </span>
-          <button
-            id="accountButton"
-            type="button"
-            disabled={loading}
-            onClick={handleAccountClick}
-          >
-            {user ? 'Keluar' : 'Masuk / Daftar'}
+      <header className="site-header">
+        <a className="logo" href="#" aria-label="Dqau Donate beranda"><span className="brand-mark">✦</span><span>Dqau <b>Donate</b></span></a>
+        <nav className="main-nav" aria-label="Navigasi utama">
+          <a href="#kreator">Jelajahi</a>
+          <a href="#komunitas">Komunitas</a>
+          <a href="#bantuan">Bantuan</a>
+        </nav>
+        <div className="header-actions">
+          {user && <span className="account" id="accountStatus">{user.email || 'Sudah masuk'}</span>}
+          <button className="header-login" id="accountButton" type="button" disabled={loading} onClick={handleAccountClick}>
+            {user ? 'Keluar' : 'Masuk'}
           </button>
         </div>
       </header>
 
       <main>
         <section className="hero entrance-content">
-          <small>✦ RUANG UNTUK PARA KREATOR</small>
-          <h1>Apresiasi karya.<br />Dukung kreator.</h1>
-          <p>Temukan kreator favoritmu dan tunjukkan dukungan untuk karya mereka.</p>
-          <button type="button" onClick={scrollToCreators}>
-            Jelajahi kreator ↓
-          </button>
+          <div className="hero-copy">
+            <div className="eyebrow"><span className="eyebrow-dot" /> RUANG UNTUK PARA KREATOR</div>
+            <h1>Karya hebat layak<br /><span>mendapat dukungan.</span></h1>
+            <p className="hero-description">Temukan orang-orang kreatif, kenali karya mereka, dan jadilah bagian dari komunitas yang mendukung proses berkarya.</p>
+            <div className="hero-actions">
+              <button className="hero-primary" type="button" onClick={scrollToCreators}>Jelajahi kreator <span aria-hidden="true">↗</span></button>
+              <button className="hero-secondary" type="button" onClick={() => { if (user) document.getElementById('profileEditor')?.scrollIntoView({ behavior: 'smooth' }); else { setAuthMode('signup'); setAuthMessage({ text: '', isError: false }); setModalOpen(true); } }}>Jadi kreator</button>
+            </div>
+            <div className="hero-note"><span className="hero-note-icon">✓</span> Kenali kreator dan temukan komunitas mereka</div>
+          </div>
+          <div className="hero-art" aria-hidden="true">
+            <div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" />
+            <div className="art-glow" />
+            <div className="art-star star-one">✦</div><div className="art-star star-two">✧</div>
+            <div className="art-main-card">
+              <div className="art-card-top"><span className="art-live-dot" /> CREATOR SPACE <span className="art-menu">•••</span></div>
+              <div className="art-avatar-stack"><span className="art-avatar art-avatar-one">✍</span><span className="art-avatar art-avatar-two">♫</span><span className="art-avatar art-avatar-three">🎨</span></div>
+              <div className="art-card-title">Ruang untuk berkarya</div>
+              <div className="art-card-subtitle">Ide • Karya • Komunitas</div>
+              <div className="art-progress"><span /></div>
+              <div className="art-card-footer"><span>TERUS BERTUMBUH</span><span>✦</span></div>
+            </div>
+            <div className="art-float-pill"><span>✦</span> Dukung kreativitas</div>
+          </div>
         </section>
 
-        <h2 className="section-title" id="kreator">Temukan kreator</h2>
-        <p>Dukungan kecil bisa berarti besar.</p>
-        <input
+        <section className="value-strip" aria-label="Tentang Dqau Donate">
+          <div><span className="value-icon">◎</span><span><b>Temukan</b><small>kreator baru</small></span></div>
+          <div><span className="value-icon">✧</span><span><b>Kenali</b><small>cerita dan karya</small></span></div>
+          <div><span className="value-icon">↗</span><span><b>Terhubung</b><small>dengan komunitas</small></span></div>
+        </section>
+
+        <section className="creator-section" aria-labelledby="kreator">
+          <div className="section-heading">
+            <div><span className="section-kicker">TEMUKAN TALENTA</span><h2 className="section-title" id="kreator">Kreator pilihanmu.</h2><p>Jelajahi profil, temukan cerita, dan kenali komunitas di balik karya.</p></div>
+            <span className="section-index">01 / EXPLORE</span>
+          </div>
+        <div className="search-wrap"><span className="search-icon" aria-hidden="true">⌕</span><input
           className="search"
           id="search"
           type="text"
@@ -538,9 +563,9 @@ export function App() {
           onChange={(e) => setSearchInput(e.target.value)}
           aria-label="Cari kreator berdasarkan nama, username, atau bio"
           placeholder="Cari nama, username, atau bio kreator..."
-        />
+        /><span className="search-hint">Cari berdasarkan nama, username, atau bio</span></div>
 
-        {user && <section className="profile-editor">
+        {user && <section className="profile-editor" id="profileEditor">
           <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
           <form onSubmit={saveProfile}>
             <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama yang akan ditampilkan" />
@@ -579,11 +604,10 @@ export function App() {
           </div>}
         </section>
 
-        <h2 className="section-title" id="komunitas">Komunitas & kanal kreator</h2>
-        <p>
+        <section className="community-section"><div className="section-heading"><div><span className="section-kicker">TETAP TERHUBUNG</span><h2 className="section-title" id="komunitas">Komunitas & kanal.</h2><p>
           Kreator bisa membangun komunitas di platform favorit. Tautan undangan atau kanal khusus akan ditampilkan di profil kreator setelah profilnya diaktifkan.
-        </p>
-        <section className="cards" aria-label="Platform komunitas">
+        </p></div><span className="section-index">02 / CONNECT</span></div>
+        <section className="cards platform-cards" aria-label="Platform komunitas">
           {PLATFORMS.map((platform) => (
             <article key={platform.id} className="card">
               <div className="avatar">{platform.avatar}</div>
@@ -600,9 +624,9 @@ export function App() {
               </a>
             </article>
           ))}
-        </section>
+        </section></section>
 
-        <h2 className="section-title" id="bantuan">Bantuan & FAQ</h2>
+        <section className="faq-section"><div className="section-heading"><div><span className="section-kicker">ADA PERTANYAAN?</span><h2 className="section-title" id="bantuan">Kami bantu kamu.</h2><p>Informasi singkat tentang fitur dan cara menggunakan Dqau Donate.</p></div><span className="section-index">03 / HELP</span></div>
         <section className="faq-list" aria-label="Pertanyaan yang sering diajukan">
           <details className="faq-item">
             <summary>Apakah donasi dan pencairan dana sudah aktif?</summary>
@@ -624,16 +648,14 @@ export function App() {
             <summary>Apakah profil saya bisa dilihat pengunjung lain?</summary>
             <p>Profil yang berhasil disimpan dapat ditampilkan sesuai kebijakan akses database. Admin proyek perlu memeriksa aturan Row Level Security (RLS) sebelum situs dipublikasikan.</p>
           </details>
-        </section>
+        </section></section>
 
         <p className="notice">
           Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini sampai integrasi pembayaran disiapkan.
         </p>
       </main>
 
-      <footer>
-        © 2026 Dqau Donate · Dibuat untuk mendukung kreativitas.
-      </footer>
+      <footer className="site-footer"><a className="logo footer-logo" href="#"><span className="brand-mark">✦</span><span>Dqau <b>Donate</b></span></a><p>Ruang untuk mendukung kreativitas dan menghubungkan komunitas.</p><span>© 2026 Dqau Donate · Dibuat untuk mendukung kreativitas.</span></footer>
 
       {/* Auth Modal */}
       {modalOpen && (
