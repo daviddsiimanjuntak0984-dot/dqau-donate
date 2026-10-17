@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
 import type { User } from '@supabase/supabase-js';
 import { OverlaySettings, OverlayView } from './overlay';
+import { DonationForm } from './DonationForm';
 
 interface CreatorProfile {
   id: string;
@@ -569,7 +570,7 @@ export function App() {
         </section>
 
         <p className="notice">
-          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini.
+          Informasi: pembayaran baru bisa diproses setelah kredensial Midtrans Sandbox dikonfigurasi. Jangan transfer uang secara manual atau menganggap redirect checkout sebagai bukti pembayaran.
         </p>
       </main>
 
@@ -794,7 +795,7 @@ export function App() {
             <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
             <span className="tag">@{selectedProfile.username}</span>
             <p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p>
-            <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
+            <DonationForm creatorId={selectedProfile.id} creatorName={selectedProfile.display_name || selectedProfile.username} />
             <button className="btn btn-primary" type="button" onClick={() => setSelectedProfile(null)}>
               Mengerti
             </button>

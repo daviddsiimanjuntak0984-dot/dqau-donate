@@ -200,3 +200,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .overlay-settings-actions .btn { flex: 1 1 140px; }
   .overlay-alert { top: 16px; right: 16px; padding: 12px; }
 }
+
+
+/* Secure donation form */
+.donation-form { margin-top: 18px; padding: 18px; border: 1px solid rgba(167,139,250,.18); border-radius: 16px; background: rgba(9,8,15,.52); }
+.donation-form h4 { margin: 0 0 8px; font-size: 18px; }
+.donation-form-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.donation-form label, .donation-form-label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: 13px; }
+.donation-form input, .donation-form textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 11px 12px; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.03); color: #fff; font: inherit; }
+.donation-amount-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.donation-amount { min-width: 0; padding: 10px 7px; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.025); color: var(--muted); cursor: pointer; font-weight: 700; font-size: 12px; }
+.donation-amount.is-selected { border-color: var(--purple); color: #fff; background: rgba(124,58,237,.22); }
+.donation-form-feedback { color: var(--accent); font-size: 13px; min-height: 1.4em; }
+.donation-form-feedback[data-error="true"] { color: #ffaaa9; }
+.donation-form form > .btn { width: 100%; }
+@media (max-width: 480px) { .donation-amount-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* OBS overlays must not inherit the dark application background. */
+html.dqua-overlay-mode, html.dqua-overlay-mode body, body.dqua-overlay-mode, body.dqua-overlay-mode #root { background: transparent !important; overflow: hidden !important; }
+body.dqua-overlay-mode { margin: 0 !important; }
+.overlay-root { position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent !important; pointer-events: none; }
+.overlay-alert { pointer-events: none; }
+
