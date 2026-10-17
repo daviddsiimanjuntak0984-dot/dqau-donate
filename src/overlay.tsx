@@ -25,7 +25,35 @@ export function OverlayView() {
   const [visible, setVisible] = useState(false);
   const [alertVersion, setAlertVersion] = useState(0);
   const hideTimer = useRef<number | undefined>(undefined);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const playNotificationSound = useCallback(() => {
+    // Generate a short two-tone chime locally; no missing/third-party audio asset.
+    // Browsers may still suppress audio until the OBS/browser audio context is allowed.
+    try {
+      const context = audioContextRef.current || new AudioContext();
+      audioContextRef.current = context;
+      if (context.state === 'suspended') void context.resume().catch(() => undefined);
+
+      const startAt = context.currentTime;
+      [880, 1174.66].forEach((frequency, index) => {
+        const start = startAt + index * 0.12;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.12, start + 0.018);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.23);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.24);
+      });
+    } catch {
+      // Audio is an enhancement; a browser policy must never break donation alerts.
+    }
+  }, []);
 
   const showAlert = useCallback((value: unknown, isTest: boolean) => {
     if (!isRecord(value) || typeof value.amount !== "number" || !Number.isFinite(value.amount) ||
@@ -43,11 +71,8 @@ export function OverlayView() {
     setVisible(true);
     if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => setVisible(false), 8000);
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      void audioRef.current.play().catch(() => undefined);
-    }
-  }, []);
+    playNotificationSound();
+  }, [playNotificationSound]);
 
   useEffect(() => {
     document.documentElement.classList.add("dqua-overlay-mode");
@@ -55,6 +80,11 @@ export function OverlayView() {
     return () => {
       document.documentElement.classList.remove("dqua-overlay-mode");
       document.body.classList.remove("dqua-overlay-mode");
+      if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => undefined);
+        audioContextRef.current = null;
+      }
     };
   }, []);
 
@@ -108,7 +138,6 @@ export function OverlayView() {
 
   return (
     <main className="overlay-root" aria-label="Dqua Donate alert overlay">
-      <audio ref={audioRef} src="/alert-chime.mp3" preload="auto" />
       <section className={"overlay-alert " + (visible ? "is-visible" : "")} role="status" aria-live="polite">
         {visible && (
           <div className="oa-confetti-layer" key={alertVersion} aria-hidden="true">
