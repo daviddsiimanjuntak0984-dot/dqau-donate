@@ -46,10 +46,8 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
-DROP POLICY IF EXISTS creator_media_public_read ON storage.objects;
-CREATE POLICY creator_media_public_read ON storage.objects
-  FOR SELECT TO anon, authenticated
-  USING (bucket_id = 'creator-media');
+-- Public buckets expose individual object URLs without opening object listing.
+-- Do not add a broad SELECT policy on storage.objects for this bucket.
 
 DROP POLICY IF EXISTS creator_media_owner_insert ON storage.objects;
 CREATE POLICY creator_media_owner_insert ON storage.objects
