@@ -41,7 +41,7 @@ npm run build
 ## Build dan deployment
 
 ```bash
-npm ci
+npm install
 npm run build
 npm run preview
 ```
