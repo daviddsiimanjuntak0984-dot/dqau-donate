@@ -6,9 +6,10 @@ Website donasi dan platform apresiasi karya bagi para kreator Indonesia, ditulis
 
 - **Navigasi & Status Akun**: Menampilkan status login pengguna (email) serta tombol Masuk / Daftar / Keluar.
 - **Hero Banner**: Desain gradien ungu khas kreator dengan tombol jelajah.
-- **Pencarian Kreator**: Input pencarian real-time berdasarkan nama, kategori, tag, atau deskripsi kreator.
-- **Kartu Kreator**: Daftar profil kreator (Kreator Baru, Ilustrator, Gamer) dengan aksi lihat profil dan dukung karya.
+- **Pencarian Kreator**: Pencarian nama tampilan, username, dan bio dengan debounce.
+- **Kartu Kreator**: Daftar profil nyata dari database dengan halaman detail berbasis URL.
 - **Kanal Komunitas**: Tautan ke platform komunitas populer kreator (Discord, YouTube, Twitch, TikTok, Instagram, Facebook, Telegram, WhatsApp).
+- **Bantuan & FAQ**: Informasi pengaturan akun, profil, avatar, dan status donasi.
 - **Modal Autentikasi Supabase**:
   - Pendaftaran & login dengan email dan kata sandi.
   - Opsi login sosial (Google, Facebook, TikTok).
