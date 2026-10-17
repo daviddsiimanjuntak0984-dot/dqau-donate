@@ -1,14 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const hasSupabaseConfig = Boolean(configuredUrl && configuredAnonKey);
 
-if (!hasSupabaseConfig) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your local .env or hosting environment.'
-  );
+if (!hasSupabaseConfig && import.meta.env.DEV) {
+  console.warn('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di file .env.local.');
 }
 
 // Use non-secret placeholders so the UI can still render when env vars are absent.
@@ -19,3 +17,4 @@ export const supabase = createClient(
 );
 
 export const isSupabaseConfigured = hasSupabaseConfig;
+export type AppSupabaseClient = SupabaseClient;
