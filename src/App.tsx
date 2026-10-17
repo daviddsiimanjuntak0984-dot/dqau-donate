@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
 import type { User } from '@supabase/supabase-js';
+import { OverlaySettings, OverlayView } from './overlay';
 
 interface CreatorProfile {
   id: string;
@@ -399,6 +400,9 @@ export function App() {
     }
   };
 
+  const overlayMode = new URLSearchParams(window.location.search).get('overlay') === '1';
+  if (overlayMode) return <OverlayView />;
+
   return (
     <>
       <header>
@@ -521,6 +525,7 @@ export function App() {
               <button className="btn btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
               {profileMessage && <p className="message" role="status">{profileMessage}</p>}
             </form>
+            <OverlaySettings userId={user.id} username={username || user.email || user.id} />
           </section>
         )}
 
