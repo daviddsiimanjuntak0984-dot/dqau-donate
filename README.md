@@ -68,7 +68,7 @@ Netlify juga dapat digunakan dengan build command `npm run build`, publish direc
 
 ## PWA dan Google Play (TWA)
 
-Manifest menggunakan ikon SVG sebagai aset awal. Untuk listing Android/Google Play yang lebih luas, buat ikon PNG raster 192×192 dan 512×512 dari desain brand (misalnya ekspor SVG dengan editor grafis) dan tambahkan ke manifest. Sebelum mengemas sebagai Trusted Web Activity (TWA), deploy aplikasi ke HTTPS, verifikasi manifest dan service worker di Chrome DevTools/Lighthouse, siapkan domain Digital Asset Links (`/.well-known/assetlinks.json`) dengan SHA-256 certificate fingerprint yang benar, lalu gunakan Bubblewrap untuk menghasilkan paket Android. Signing key dan fingerprint harus dijaga dan tidak boleh ditebak.
+Manifest memakai ikon PNG 192×192 dan 512×512 untuk instalasi, dengan ikon SVG sebagai sumber vektor. Sebelum listing Android/Google Play, periksa kembali hasil ikon di perangkat sasaran. Sebelum mengemas sebagai Trusted Web Activity (TWA), deploy aplikasi ke HTTPS, verifikasi manifest dan service worker di Chrome DevTools/Lighthouse, siapkan domain Digital Asset Links (`/.well-known/assetlinks.json`) dengan SHA-256 certificate fingerprint yang benar, lalu gunakan Bubblewrap untuk menghasilkan paket Android. Signing key dan fingerprint harus dijaga dan tidak boleh ditebak.
 
 ## Checklist uji manual
 
