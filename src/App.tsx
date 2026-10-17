@@ -629,7 +629,7 @@ export function App() {
             <span className="tag">@{selectedProfile.username}</span>
             <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
             <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
-            <button type="button" onClick={() => setSelectedCreator(null)}>
+            <button type="button" onClick={() => setSelectedProfile(null)}>
               Mengerti
             </button>
           </div>
