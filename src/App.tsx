@@ -596,6 +596,39 @@ export function App() {
     setSavingProfile(false);
   };
 
+  const openCreatorProfile = (profile: CreatorProfile) => {
+    const url = new URL(window.location.href);
+    url.pathname = '/u/' + encodeURIComponent(profile.username);
+    url.searchParams.delete('creator');
+    window.history.pushState({}, '', url);
+    setSelectedProfile(profile);
+  };
+
+  const closeCreatorProfile = () => {
+    const url = new URL(window.location.href);
+    url.pathname = '/';
+    url.searchParams.delete('creator');
+    window.history.replaceState({}, '', url);
+    setSelectedProfile(null);
+  };
+
+  useEffect(() => {
+    const syncCreatorFromLocation = () => {
+      const queryUsername = new URLSearchParams(window.location.search).get('creator');
+      const pathMatch = window.location.pathname.match(/^\\/u\\/([a-z0-9_]{3,20})\\/?$/i);
+      const pathUsername = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]).toLowerCase() : null;
+      const usernameFromUrl = (queryUsername || pathUsername || '').trim().toLowerCase();
+      if (!usernameFromUrl) {
+        setSelectedProfile(null);
+        return;
+      }
+      setSelectedProfile(profiles.find((profile) => profile.username === usernameFromUrl) || null);
+    };
+    window.addEventListener('popstate', syncCreatorFromLocation);
+    syncCreatorFromLocation();
+    return () => window.removeEventListener('popstate', syncCreatorFromLocation);
+  }, [profiles]);
+
   const scrollToCreators = () => {
     const elem = document.getElementById('kreator');
     if (elem) {
@@ -774,7 +807,7 @@ export function App() {
               profile={profiles.find((item) => item.id === user.id) || null}
               onOpenProfile={() => {
                 const ownProfile = profiles.find((item) => item.id === user.id);
-                if (ownProfile) setSelectedProfile(ownProfile);
+                if (ownProfile) openCreatorProfile(ownProfile);
               }}
             />
             <OverlaySettings userId={user.id} username={username || user.email || user.id} />
@@ -795,7 +828,7 @@ export function App() {
                 <p>{profile.bio || 'Kreator ini belum menambahkan bio.'}</p>
                 <div className="creator-card-actions">
                   <span className="creator-card-media-count">{profile.album_urls?.length || 0} foto album</span>
-                  <button className="btn btn-ghost" type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => openCreatorProfile(profile)}>Lihat profil</button>
                 </div>
               </div>
             </article>
@@ -1043,7 +1076,7 @@ export function App() {
           profile={selectedProfile}
           viewerId={user?.id || null}
           viewerHasProfile={Boolean(user && profiles.some((item) => item.id === user.id))}
-          onClose={() => setSelectedProfile(null)}
+          onClose={closeCreatorProfile}
           onNeedLogin={() => {
             setAuthMode('login');
             setAuthMessage({ text: '', isError: false });
