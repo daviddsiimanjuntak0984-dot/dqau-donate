@@ -120,6 +120,7 @@ export function App() {
   const [profiles, setProfiles] = useState<CreatorProfile[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileMessage, setProfileMessage] = useState('');
+  const [profileLoadMessage, setProfileLoadMessage] = useState('');
   const [profileName, setProfileName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -144,8 +145,37 @@ export function App() {
     }
     const loadProfiles = async () => {
       setProfileLoading(true);
-      const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
-      if (!error && data) setProfiles(data as CreatorProfile[]);
+      setProfileLoadMessage('');
+      const extendedSelect = 'id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at';
+      const { data, error } = await supabase.from('profiles').select(extendedSelect).order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setProfiles(data as CreatorProfile[]);
+      } else if (error && /cover_url|album_urls|social_links|is_public|updated_at|schema cache/i.test(error.message)) {
+        // Branch previews may temporarily target a database that has not received
+        // the additive profile-media migration yet. Keep older public profiles readable.
+        const legacy = await supabase
+          .from('profiles')
+          .select('id, username, display_name, bio, avatar_url, created_at')
+          .order('created_at', { ascending: false });
+        if (!legacy.error && legacy.data) {
+          setProfiles(legacy.data.map((profile) => ({
+            ...profile,
+            cover_url: null,
+            album_urls: [],
+            social_links: {},
+            is_public: true,
+            updated_at: profile.created_at,
+          })) as CreatorProfile[]);
+          setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Daftar kreator tetap tampil; unggah media baru aktif setelah migration diterapkan.');
+        } else {
+          setProfiles([]);
+          setProfileLoadMessage('Daftar kreator belum dapat dimuat. Periksa konfigurasi Supabase dan migration database.');
+        }
+      } else {
+        setProfiles([]);
+        setProfileLoadMessage('Daftar kreator belum dapat dimuat. Periksa konfigurasi Supabase dan izin akses database.');
+      }
       setProfileLoading(false);
     };
     void loadProfiles();
@@ -180,19 +210,32 @@ export function App() {
         .select('username, display_name, bio, avatar_url, cover_url, album_urls')
         .eq('id', user.id)
         .maybeSingle();
-      if (error) {
-        setProfileMessage('Gagal memuat profil: ' + error.message);
+      let profile = data;
+      if (error && /cover_url|album_urls|schema cache/i.test(error.message)) {
+        const legacy = await supabase
+          .from('profiles')
+          .select('username, display_name, bio, avatar_url, created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (legacy.error) {
+          setProfileMessage('Profil belum dapat dimuat. Periksa konfigurasi database.');
+          return;
+        }
+        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [] } : null;
+        setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Simpan perubahan media setelah migration diterapkan.');
+      } else if (error) {
+        setProfileMessage('Gagal memuat profil. Periksa izin akses database.');
         return;
       }
-      if (data) {
-        setProfileName(data.display_name || '');
-        setUsername(data.username || '');
-        setBio(data.bio || '');
-        setAvatarUrl(data.avatar_url || '');
-        setAvatarPreview(data.avatar_url || null);
-        setCoverUrl(data.cover_url || '');
-        setCoverPreview(data.cover_url || null);
-        setAlbumUrls(Array.isArray(data.album_urls) ? data.album_urls.filter((url: unknown): url is string => typeof url === 'string') : []);
+      if (profile) {
+        setProfileName(profile.display_name || '');
+        setUsername(profile.username || '');
+        setBio(profile.bio || '');
+        setAvatarUrl(profile.avatar_url || '');
+        setAvatarPreview(profile.avatar_url || null);
+        setCoverUrl(profile.cover_url || '');
+        setCoverPreview(profile.cover_url || null);
+        setAlbumUrls(Array.isArray(profile.album_urls) ? profile.album_urls.filter((url: unknown): url is string => typeof url === 'string') : []);
       }
     };
     void loadMyProfile();
@@ -665,13 +708,14 @@ export function App() {
                 </div>
               )}
 
-              <button className="btn btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
+              <button className="btn btn-primary" type="submit" disabled={savingProfile || avatarUploading || coverUploading || albumUploading}>{savingProfile ? 'Menyimpan…' : (avatarUploading || coverUploading || albumUploading) ? 'Menunggu unggahan selesai…' : 'Simpan profil'}</button>
               {profileMessage && <p className="message" role="status">{profileMessage}</p>}
             </form>
             <OverlaySettings userId={user.id} username={username || user.email || user.id} />
           </section>
         )}
 
+        {profileLoadMessage && <p className="schema-compatibility-note" role="status">{profileLoadMessage}</p>}
         <section className="cards" id="cards">
           {profileLoading ? <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
