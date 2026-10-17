@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabase';
+import { useDebounce } from './hooks/useDebounce';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import type { User } from '@supabase/supabase-js';
 
 interface CreatorProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; }
@@ -117,6 +119,27 @@ export function App() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
+  const [donateOpen, setDonateOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<'about' | 'links' | 'posts'>('about');
+  const [entranceVisible, setEntranceVisible] = useState(true);
+  const authDialogRef = useRef<HTMLDivElement>(null);
+  const creatorDialogRef = useRef<HTMLDivElement>(null);
+  const alertDialogRef = useRef<HTMLDivElement>(null);
+  const donateDialogRef = useRef<HTMLDivElement>(null);
+  const debouncedSearch = useDebounce(searchInput, 250);
+  const debouncedUsername = useDebounce(username.trim().toLowerCase(), 350);
+
+  useFocusTrap(modalOpen, authDialogRef, () => { setModalOpen(false); setAuthMessage({ text: '', isError: false }); });
+  useFocusTrap(Boolean(selectedProfile), creatorDialogRef, () => closeCreatorProfile());
+  useFocusTrap(Boolean(alertInfo), alertDialogRef, () => setAlertInfo(null));
+  useFocusTrap(donateOpen, donateDialogRef, () => setDonateOpen(false));
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) { setEntranceVisible(false); return; }
+    const timeoutId = window.setTimeout(() => setEntranceVisible(false), 1150);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -153,13 +176,10 @@ export function App() {
     void loadMyProfile();
   }, [user]);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setSearch(searchInput), 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [searchInput]);
+  useEffect(() => { setSearch(debouncedSearch); }, [debouncedSearch]);
 
   useEffect(() => {
-    const value = username.trim().toLowerCase();
+    const value = debouncedUsername;
     if (!user || !/^[a-z0-9_]{3,24}$/.test(value)) {
       setUsernameStatus('idle');
       return;
@@ -173,7 +193,7 @@ export function App() {
       else setUsernameStatus(data ? 'taken' : 'available');
     }, 350);
     return () => { active = false; window.clearTimeout(timeoutId); };
-  }, [username, user]);
+  }, [debouncedUsername, user]);
 
   useEffect(() => {
     const syncCreatorFromUrl = () => {
@@ -185,33 +205,6 @@ export function App() {
     window.addEventListener('popstate', syncCreatorFromUrl);
     return () => window.removeEventListener('popstate', syncCreatorFromUrl);
   }, [profiles]);
-
-  useEffect(() => {
-    const selector = modalOpen ? '#authModal .dialog' : selectedProfile ? '#creatorDialog .alert-dialog' : alertInfo ? '#alertDialog .alert-dialog' : null;
-    if (!selector) return;
-    const activeDialog = document.querySelector<HTMLElement>(selector);
-    if (!activeDialog) return;
-    const previousActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    activeDialog.tabIndex = -1;
-    activeDialog.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (modalOpen) { setModalOpen(false); setAuthMessage({ text: '', isError: false }); }
-        else if (selectedProfile) { const url = new URL(window.location.href); url.searchParams.delete('creator'); window.history.replaceState({}, '', url); setSelectedProfile(null); }
-        else if (alertInfo) setAlertInfo(null);
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(activeDialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.offsetParent !== null);
-      if (focusable.length === 0) { event.preventDefault(); activeDialog.focus(); return; }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === activeDialog)) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => { document.removeEventListener('keydown', onKeyDown); previousActive?.focus(); };
-  }, [modalOpen, selectedProfile, alertInfo]);
 
   const handleAccountClick = async () => {
     if (user) {
@@ -399,6 +392,11 @@ export function App() {
     const cleanUsername = username.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
     setSavingProfile(true); setProfileMessage('');
+    if (debouncedUsername !== cleanUsername || usernameStatus === 'checking') {
+      setProfileMessage('Tunggu sampai pemeriksaan username selesai.');
+      setSavingProfile(false);
+      return;
+    }
     if (usernameStatus === 'taken') {
       setProfileMessage('Username sudah dipakai. Pilih username lain.');
       setSavingProfile(false);
@@ -423,6 +421,7 @@ export function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('creator', profile.username);
     window.history.pushState({}, '', url);
+    setProfileTab('about');
     setSelectedProfile(profile);
   };
 
@@ -431,6 +430,19 @@ export function App() {
     url.searchParams.delete('creator');
     window.history.replaceState({}, '', url);
     setSelectedProfile(null);
+  };
+
+  const shareProfile = async (profile: CreatorProfile) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('creator', profile.username);
+    const shareData = { title: `${profile.display_name || profile.username} — Dqau Donate`, text: `Lihat profil @${profile.username} di Dqau Donate`, url: url.toString() };
+    try {
+      if (navigator.share) await navigator.share(shareData);
+      else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(shareData.url); setAlertInfo('Tautan profil berhasil disalin.'); }
+      else setAlertInfo(`Bagikan tautan ini: ${shareData.url}`);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setAlertInfo('Tidak dapat membagikan tautan otomatis. Salin URL profil dari bilah alamat.');
+    }
   };
 
   const scrollToCreators = () => {
@@ -442,6 +454,7 @@ export function App() {
 
   return (
     <>
+      {entranceVisible && <div className="entrance-overlay" role="status" aria-label="Dqau Donate sedang dibuka"><div className="entrance-mark">✦</div><strong>Dqau Donate</strong><span>Ruang untuk para kreator</span></div>}
       <header>
         <div className="logo">✦ Dqau Donate</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -460,7 +473,7 @@ export function App() {
       </header>
 
       <main>
-        <section className="hero">
+        <section className="hero entrance-content">
           <small>✦ RUANG UNTUK PARA KREATOR</small>
           <h1>Apresiasi karya.<br />Dukung kreator.</h1>
           <p>Temukan kreator favoritmu dan tunjukkan dukungan untuk karya mereka.</p>
@@ -477,7 +490,8 @@ export function App() {
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Cari nama atau kategori kreator..."
+          aria-label="Cari kreator berdasarkan nama, username, atau bio"
+          placeholder="Cari nama, username, atau bio kreator..."
         />
 
         {user && <section className="profile-editor">
@@ -492,14 +506,15 @@ export function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
               {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
               <div style={{ flex: 1 }}>
-                <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
+                <input id="creatorAvatar" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="avatarHelp" onChange={handleAvatarFileChange} />
+                <small id="avatarHelp" className="muted-note">JPG, PNG, atau WebP. Maksimal 2MB. Pastikan bucket avatars dan kebijakan Storage sudah disiapkan.</small>
                 <div style={{ marginTop: 6 }}>
                   <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
                 </div>
               </div>
             </div>
 
-            <button type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
+            <button type="submit" disabled={savingProfile || avatarUploading}>{savingProfile ? 'Menyimpan…' : avatarUploading ? 'Menunggu upload avatar…' : 'Simpan profil'}</button>
             {profileMessage && <p className="message" role="status">{profileMessage}</p>}
           </form>
         </section>}
@@ -589,7 +604,7 @@ export function App() {
             }
           }}
         >
-          <div className="dialog" tabIndex={-1}>
+          <div className="dialog" ref={authDialogRef} tabIndex={-1}>
             <button
               className="close"
               id="closeModal"
@@ -781,16 +796,38 @@ export function App() {
           aria-labelledby="creatorDialogTitle"
           onClick={closeCreatorProfile}
         >
-          <div className="alert-dialog" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{width:88,height:88,borderRadius:18,display:'grid',placeItems:'center'}}>👤</div>}
-            <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
-            <span className="tag">@{selectedProfile.username}</span>
-            <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
-            <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
-            <button type="button" onClick={closeCreatorProfile}>
-              Mengerti
-            </button>
-          </div>
+          <section className="profile-dialog" ref={creatorDialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()} aria-label={`Profil ${selectedProfile.display_name || selectedProfile.username}`}>
+            <header className="profile-cover" aria-label="Sampul profil kreator"><span className="cover-caption">KREATOR DQAU</span></header>
+            <div className="profile-identity">
+              {selectedProfile.avatar_url ? <img className="profile-large-avatar" src={selectedProfile.avatar_url} alt={`Foto profil ${selectedProfile.display_name || selectedProfile.username}`} /> : <div className="profile-large-avatar profile-initials" aria-label="Avatar inisial">{(selectedProfile.display_name || selectedProfile.username || 'K').trim().charAt(0).toUpperCase()}</div>}
+              <div className="profile-heading"><h2 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h2><span className="profile-handle">@{selectedProfile.username}</span><span className="profile-joined">Bergabung {selectedProfile.created_at && !Number.isNaN(Date.parse(selectedProfile.created_at)) ? new Date(selectedProfile.created_at).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : 'di Dqau Donate'}</span></div>
+              <div className="profile-actions"><button type="button" aria-label={`Dukung ${selectedProfile.display_name || selectedProfile.username}`} onClick={() => setDonateOpen(true)}>Dukung</button><button type="button" className="secondary" aria-label={`Bagikan profil ${selectedProfile.username}`} onClick={() => void shareProfile(selectedProfile)}>Bagikan</button></div>
+            </div>
+            <nav className="profile-tabs" role="tablist" aria-label="Bagian profil kreator">
+              <button type="button" role="tab" aria-selected={profileTab === 'about'} className={profileTab === 'about' ? 'active' : ''} onClick={() => setProfileTab('about')}>Tentang</button>
+              <button type="button" role="tab" aria-selected={profileTab === 'links'} className={profileTab === 'links' ? 'active' : ''} onClick={() => setProfileTab('links')}>Tautan</button>
+              <button type="button" role="tab" aria-selected={profileTab === 'posts'} className={profileTab === 'posts' ? 'active' : ''} onClick={() => setProfileTab('posts')}>Postingan</button>
+            </nav>
+            <section className="profile-tab-panel" role="tabpanel" aria-live="polite">
+              {profileTab === 'about' && <><h3>Tentang saya</h3><p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p><p className="profile-meta">Profil kreator publik di Dqau Donate.</p></>}
+              {profileTab === 'links' && <><h3>Tautan kreator</h3><p>Belum ada tautan sosial yang ditambahkan ke profil ini.</p></>}
+              {profileTab === 'posts' && <><h3>Postingan</h3><p>Fitur postingan belum tersedia. Bagian ini akan aktif setelah sistem posting terhubung.</p></>}
+            </section>
+            <button type="button" className="profile-close secondary" onClick={closeCreatorProfile}>Tutup profil</button>
+          </section>
+        </div>
+      )}
+
+
+      {donateOpen && selectedProfile && (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="donateTitle" onClick={(event) => { if (event.target === event.currentTarget) setDonateOpen(false); }}>
+          <section className="alert-dialog donate-dialog" ref={donateDialogRef} tabIndex={-1}>
+            <button className="close" type="button" aria-label="Tutup dialog dukungan" onClick={() => setDonateOpen(false)}>×</button>
+            <h3 id="donateTitle">Dukung @{selectedProfile.username}</h3>
+            <p>Terima kasih ingin mendukung kreator ini. Pembayaran belum terhubung, jadi belum ada transaksi yang dapat dilakukan melalui situs ini.</p>
+            <p className="donate-warning">Jangan transfer uang di luar platform atas nama Dqau Donate sebelum metode pembayaran resmi tersedia.</p>
+            <button type="button" onClick={() => setDonateOpen(false)}>Mengerti</button>
+          </section>
         </div>
       )}
 
@@ -804,7 +841,7 @@ export function App() {
           aria-labelledby="alertDialogTitle"
           onClick={() => setAlertInfo(null)}
         >
-          <div className="alert-dialog" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+          <div className="alert-dialog" ref={alertDialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
             <h3 id="alertDialogTitle">Pemberitahuan</h3>
             <p>{alertInfo}</p>
             <button type="button" onClick={() => setAlertInfo(null)}>
