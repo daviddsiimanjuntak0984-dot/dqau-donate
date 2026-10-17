@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
 
-interface CreatorProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; }
-
+interface CreatorProfile {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string;
+  avatar_url: string | null;
+  created_at: string;
+}
 
 interface PlatformCard {
   id: string;
@@ -115,6 +121,7 @@ export function App() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -138,10 +145,23 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); setAvatarPreview(null); return; }
+    if (!user) {
+      setProfileName('');
+      setUsername('');
+      setBio('');
+      setAvatarUrl('');
+      setAvatarPreview(null);
+      return;
+    }
     const loadMyProfile = async () => {
       const { data } = await supabase.from('profiles').select('username, display_name, bio, avatar_url').eq('id', user.id).maybeSingle();
-      if (data) { setProfileName(data.display_name || ''); setUsername(data.username || ''); setBio(data.bio || ''); setAvatarUrl(data.avatar_url || ''); setAvatarPreview(data.avatar_url || null); }
+      if (data) {
+        setProfileName(data.display_name || '');
+        setUsername(data.username || '');
+        setBio(data.bio || '');
+        setAvatarUrl(data.avatar_url || '');
+        setAvatarPreview(data.avatar_url || null);
+      }
     };
     void loadMyProfile();
   }, [user]);
@@ -317,7 +337,6 @@ export function App() {
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files && e.target.files[0];
     if (f) {
-      // quick client preview
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(String(reader.result));
       reader.readAsDataURL(f);
@@ -329,11 +348,22 @@ export function App() {
     e.preventDefault();
     if (!user) return;
     const cleanUsername = username.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
-    setSavingProfile(true); setProfileMessage('');
-    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null }, { returning: 'representation' });
-    if (error) setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + error.message);
-    else {
+    if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) {
+      setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.');
+      return;
+    }
+    setSavingProfile(true);
+    setProfileMessage('');
+    const { error } = await supabase.from('profiles').upsert({
+      id: user.id,
+      username: cleanUsername,
+      display_name: profileName.trim(),
+      bio: bio.trim(),
+      avatar_url: avatarUrl.trim() || null,
+    }, { returning: 'representation' });
+    if (error) {
+      setProfileMessage((error as any).code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + (error as any).message);
+    } else {
       setProfileMessage('Profil berhasil disimpan.');
       const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
       if (data) setProfiles(data as CreatorProfile[]);
@@ -351,20 +381,53 @@ export function App() {
   return (
     <>
       <header>
-        <div className="logo">✦ Dqau Donate</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span className="account" id="accountStatus">
-            {user ? user.email || 'Sudah masuk' : 'Belum masuk'}
-          </span>
-          <button
-            id="accountButton"
-            type="button"
-            disabled={loading}
-            onClick={handleAccountClick}
-          >
-            {user ? 'Keluar' : 'Masuk / Daftar'}
-          </button>
+        <div className="container header-inner">
+          <div className="logo" aria-hidden>
+            <span>✦</span>
+            <span>Dqau Donate</span>
+          </div>
+
+          <nav className="nav" aria-label="Main navigation">
+            <a href="#kreator">Kreator</a>
+            <a href="#komunitas">Komunitas</a>
+            <a href="#cards">Daftar</a>
+          </nav>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="account" id="accountStatus" aria-live="polite">
+              {user ? user.email || 'Sudah masuk' : 'Belum masuk'}
+            </div>
+
+            <button
+              className="btn btn-primary"
+              id="accountButton"
+              type="button"
+              disabled={loading}
+              onClick={handleAccountClick}
+            >
+              {user ? 'Keluar' : 'Masuk / Daftar'}
+            </button>
+
+            <button
+              className="menu-toggle"
+              aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+              onClick={() => setIsMenuOpen(v => !v)}
+            >
+              ☰
+            </button>
+          </div>
         </div>
+
+        {isMenuOpen && (
+          <div style={{ padding: '8px 5%', borderTop: '1px solid rgba(255,255,255,0.02)', background: 'rgba(0,0,0,0.35)' }}>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <a href="#kreator" onClick={() => setIsMenuOpen(false)}>Kreator</a>
+              <a href="#komunitas" onClick={() => setIsMenuOpen(false)}>Komunitas</a>
+              <a href="#cards" onClick={() => setIsMenuOpen(false)}>Daftar</a>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main>
@@ -372,7 +435,7 @@ export function App() {
           <small>✦ RUANG UNTUK PARA KREATOR</small>
           <h1>Apresiasi karya.<br />Dukung kreator.</h1>
           <p>Temukan kreator favoritmu dan tunjukkan dukungan untuk karya mereka.</p>
-          <button type="button" onClick={scrollToCreators}>
+          <button className="btn btn-primary" type="button" onClick={scrollToCreators}>
             Jelajahi kreator ↓
           </button>
         </section>
@@ -388,38 +451,69 @@ export function App() {
           placeholder="Cari nama atau kategori kreator..."
         />
 
-        {user && <section className="profile-editor">
-          <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
-          <form onSubmit={saveProfile}>
-            <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama yang akan ditampilkan" />
-            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="username_kamu" />
-            <label htmlFor="creatorBio">Bio</label><textarea id="creatorBio" value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={3} placeholder="Ceritakan tentang karya kamu" />
+        {user && (
+          <section className="profile-editor">
+            <h3>Profil kreator kamu</h3>
+            <p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
+            <form onSubmit={saveProfile}>
+              <label htmlFor="creatorDisplayName">Nama tampilan</label>
+              <input
+                id="creatorDisplayName"
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                maxLength={60}
+                placeholder="Nama yang terlihat di profil"
+              />
 
-            <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
-              {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
-              <div style={{ flex: 1 }}>
-                <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
-                <div style={{ marginTop: 6 }}>
-                  <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
+              <label htmlFor="creatorUsername">Username unik</label>
+              <input
+                id="creatorUsername"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+                minLength={3}
+                maxLength={24}
+                placeholder="username_kamu"
+              />
+
+              <label htmlFor="creatorBio">Bio</label>
+              <textarea
+                id="creatorBio"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Ceritakan tentang karya kamu"
+              />
+
+              <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
+                {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
+                <div style={{ flex: 1 }}>
+                  <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
+                  <div style={{ marginTop: 6 }}>
+                    <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
-            {profileMessage && <p className="message" role="status">{profileMessage}</p>}
-          </form>
-        </section>}
+              <button className="btn btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
+              {profileMessage && <p className="message" role="status">{profileMessage}</p>}
+            </form>
+          </section>
+        )}
+
         <section className="cards" id="cards">
-          {profileLoading ? <p style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
+          {profileLoading ? <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
-              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || 'K').charAt(0).toUpperCase()}</div>}
-              <h3>{profile.display_name || profile.username}</h3><span className="tag">@{profile.username}</span>
+              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || '').charAt(0).toUpperCase()}</div>}
+              <h3>{profile.display_name || profile.username}</h3>
+              <span className="tag">@{profile.username}</span>
               <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
-              <button type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
+              <button className="btn btn-ghost" type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
             </article>
           ))}
-          {!profileLoading && filteredProfiles.length === 0 && <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>
+          {!profileLoading && filteredProfiles.length === 0 && <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>
             <h3>{search ? 'Profil tidak ditemukan' : 'Belum ada profil kreator'}</h3>
             <p>{search ? 'Coba kata kunci lain.' : 'Profil nyata akan muncul setelah kreator mendaftar dan menyimpan profilnya. Tidak ada kartu contoh.'}</p>
           </div>}
@@ -449,7 +543,7 @@ export function App() {
         </section>
 
         <p className="notice">
-          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini sampai integrasi pembayaran disiapkan.
+          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini.
         </p>
       </main>
 
@@ -457,7 +551,6 @@ export function App() {
         © 2026 Dqau Donate · Dibuat untuk mendukung kreativitas.
       </footer>
 
-      {/* Auth Modal */}
       {modalOpen && (
         <div
           className="modal"
@@ -501,6 +594,7 @@ export function App() {
                 type="email"
                 autoComplete="email"
                 required
+                autoFocus
                 placeholder="nama@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -528,12 +622,12 @@ export function App() {
               </p>
 
               <div className="actions">
-                <button type="submit" id="submitAuth" disabled={loading}>
+                <button className="btn btn-primary" type="submit" id="submitAuth" disabled={loading}>
                   {authMode === 'signup' ? 'Daftar' : 'Masuk'}
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   id="switchMode"
                   disabled={loading}
                   onClick={() => {
@@ -551,7 +645,7 @@ export function App() {
               <div className="social-grid">
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('google')}
                 >
@@ -559,7 +653,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('facebook')}
                 >
@@ -567,7 +661,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('tiktok')}
                 >
@@ -575,7 +669,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   id="showPhoneAuth"
                   onClick={() => {
                     setShowPhoneAuth(true);
@@ -607,6 +701,7 @@ export function App() {
                     id="sendPhoneCode"
                     disabled={phoneLoading}
                     onClick={handleSendPhoneCode}
+                    className="btn btn-primary"
                   >
                     Kirim kode SMS
                   </button>
@@ -627,12 +722,13 @@ export function App() {
                     id="verifyPhoneCode"
                     disabled={phoneLoading}
                     onClick={handleVerifyPhoneCode}
+                    className="btn btn-primary"
                   >
                     Verifikasi & masuk
                   </button>
                   <button
                     type="button"
-                    className="secondary"
+                    className="btn btn-ghost"
                     id="hidePhoneAuth"
                     onClick={() => {
                       setShowPhoneAuth(false);
@@ -664,19 +760,22 @@ export function App() {
           onClick={() => setSelectedProfile(null)}
         >
           <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{width:88,height:88,borderRadius:18,display:'grid',placeItems:'center'}}>👤</div>}
+            {selectedProfile.avatar_url ? (
+              <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} />
+            ) : (
+              <div className="avatar">{(selectedProfile.display_name || selectedProfile.username || '').charAt(0).toUpperCase()}</div>
+            )}
             <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
             <span className="tag">@{selectedProfile.username}</span>
-            <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
+            <p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p>
             <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
-            <button type="button" onClick={() => setSelectedProfile(null)}>
+            <button className="btn btn-primary" type="button" onClick={() => setSelectedProfile(null)}>
               Mengerti
             </button>
           </div>
         </div>
       )}
 
-      {/* Alert modal (replaces window.alert for clean iframe compliance) */}
       {alertInfo && (
         <div
           className="modal"
@@ -687,7 +786,7 @@ export function App() {
           <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Pemberitahuan</h3>
             <p>{alertInfo}</p>
-            <button type="button" onClick={() => setAlertInfo(null)}>
+            <button className="btn btn-primary" type="button" onClick={() => setAlertInfo(null)}>
               Mengerti
             </button>
           </div>
