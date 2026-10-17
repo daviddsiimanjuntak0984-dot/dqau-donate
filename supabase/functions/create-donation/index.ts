@@ -39,6 +39,15 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Metode tidak diizinkan." }, 405);
 
+  // Payments stay disabled until the owner explicitly approves activation.
+  // Default-deny applies even if provider credentials were accidentally added.
+  if (Deno.env.get("DQUA_DONATIONS_ENABLED") !== "true") {
+    return json({
+      error: "Pembayaran belum diaktifkan oleh pengelola Dqua Donate.",
+      code: "DONATION_PROCESSING_DISABLED",
+    }, 503);
+  }
+
   const midtransServerKey = Deno.env.get("MIDTRANS_SERVER_KEY");
   if (!midtransServerKey) {
     return json({
