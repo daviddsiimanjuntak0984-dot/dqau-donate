@@ -93,6 +93,7 @@ const PLATFORMS: PlatformCard[] = [
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
@@ -109,6 +110,7 @@ export function App() {
   const [profileMessage, setProfileMessage] = useState('');
   const [profileName, setProfileName] = useState('');
   const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -120,7 +122,12 @@ export function App() {
     const loadProfiles = async () => {
       setProfileLoading(true);
       const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
-      if (!error && data) setProfiles(data as CreatorProfile[]);
+      if (!error && data) {
+        const loadedProfiles = data as CreatorProfile[];
+        setProfiles(loadedProfiles);
+        const creatorUsername = new URLSearchParams(window.location.search).get('creator');
+        if (creatorUsername) setSelectedProfile(loadedProfiles.find((profile) => profile.username === creatorUsername) || null);
+      }
       setProfileLoading(false);
     };
     void loadProfiles();
@@ -145,6 +152,66 @@ export function App() {
     };
     void loadMyProfile();
   }, [user]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setSearch(searchInput), 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const value = username.trim().toLowerCase();
+    if (!user || !/^[a-z0-9_]{3,24}$/.test(value)) {
+      setUsernameStatus('idle');
+      return;
+    }
+    let active = true;
+    setUsernameStatus('checking');
+    const timeoutId = window.setTimeout(async () => {
+      const { data, error } = await supabase.from('profiles').select('id').eq('username', value).neq('id', user.id).maybeSingle();
+      if (!active) return;
+      if (error) setUsernameStatus('error');
+      else setUsernameStatus(data ? 'taken' : 'available');
+    }, 350);
+    return () => { active = false; window.clearTimeout(timeoutId); };
+  }, [username, user]);
+
+  useEffect(() => {
+    const syncCreatorFromUrl = () => {
+      const creatorUsername = new URLSearchParams(window.location.search).get('creator');
+      if (!creatorUsername) { setSelectedProfile(null); return; }
+      const match = profiles.find((profile) => profile.username === creatorUsername);
+      setSelectedProfile(match || null);
+    };
+    window.addEventListener('popstate', syncCreatorFromUrl);
+    return () => window.removeEventListener('popstate', syncCreatorFromUrl);
+  }, [profiles]);
+
+  useEffect(() => {
+    const selector = modalOpen ? '#authModal .dialog' : selectedProfile ? '#creatorDialog .alert-dialog' : alertInfo ? '#alertDialog .alert-dialog' : null;
+    if (!selector) return;
+    const activeDialog = document.querySelector<HTMLElement>(selector);
+    if (!activeDialog) return;
+    const previousActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    activeDialog.tabIndex = -1;
+    activeDialog.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (modalOpen) { setModalOpen(false); setAuthMessage({ text: '', isError: false }); }
+        else if (selectedProfile) { const url = new URL(window.location.href); url.searchParams.delete('creator'); window.history.replaceState({}, '', url); setSelectedProfile(null); }
+        else if (alertInfo) setAlertInfo(null);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(activeDialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) { event.preventDefault(); activeDialog.focus(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === activeDialog)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('keydown', onKeyDown); previousActive?.focus(); };
+  }, [modalOpen, selectedProfile, alertInfo]);
 
   const handleAccountClick = async () => {
     if (user) {
@@ -290,12 +357,13 @@ export function App() {
 
   const uploadAvatar = async (file: File) => {
     if (!user) { setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah avatar.'); return null; }
-    if (!file.type.startsWith('image/')) { setProfileMessage('Hanya file gambar yang diizinkan.'); return null; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setProfileMessage('Gunakan gambar JPG, PNG, atau WebP.'); return null; }
     if (file.size > 2 * 1024 * 1024) { setProfileMessage('Ukuran maksimal avatar 2MB.'); return null; }
     setAvatarUploading(true);
     setProfileMessage('Mengunggah avatar...');
     try {
-      const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp';
+      const filePath = `${user.id}/${Date.now()}.${extension}`;
       const bucket = 'avatars';
       const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
@@ -331,14 +399,38 @@ export function App() {
     const cleanUsername = username.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
     setSavingProfile(true); setProfileMessage('');
-    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null }, { returning: 'representation' });
+    if (usernameStatus === 'taken') {
+      setProfileMessage('Username sudah dipakai. Pilih username lain.');
+      setSavingProfile(false);
+      return;
+    }
+    const { data: savedProfile, error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null })
+      .select('id, username, display_name, bio, avatar_url, created_at')
+      .single();
     if (error) setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + error.message);
     else {
+      if (savedProfile) setProfiles((current) => [savedProfile as CreatorProfile, ...current.filter((profile) => profile.id !== user.id)]);
       setProfileMessage('Profil berhasil disimpan.');
       const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
       if (data) setProfiles(data as CreatorProfile[]);
     }
     setSavingProfile(false);
+  };
+
+  const openCreatorProfile = (profile: CreatorProfile) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('creator', profile.username);
+    window.history.pushState({}, '', url);
+    setSelectedProfile(profile);
+  };
+
+  const closeCreatorProfile = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('creator');
+    window.history.replaceState({}, '', url);
+    setSelectedProfile(null);
   };
 
   const scrollToCreators = () => {
@@ -383,8 +475,8 @@ export function App() {
           className="search"
           id="search"
           type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Cari nama atau kategori kreator..."
         />
 
@@ -392,7 +484,8 @@ export function App() {
           <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
           <form onSubmit={saveProfile}>
             <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama yang akan ditampilkan" />
-            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="username_kamu" />
+            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} pattern="[a-zA-Z0-9_]{3,24}" aria-describedby="usernameStatus" placeholder="username_kamu" />
+            <small id="usernameStatus" className={`username-status ${usernameStatus}`} aria-live="polite">{usernameStatus === 'checking' ? 'Memeriksa username…' : usernameStatus === 'available' ? 'Username tersedia.' : usernameStatus === 'taken' ? 'Username sudah dipakai.' : usernameStatus === 'error' ? 'Tidak bisa memeriksa username; validasi akan dilakukan saat menyimpan.' : '3–24 karakter: huruf, angka, atau garis bawah.'}</small>
             <label htmlFor="creatorBio">Bio</label><textarea id="creatorBio" value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={3} placeholder="Ceritakan tentang karya kamu" />
 
             <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
@@ -411,12 +504,12 @@ export function App() {
           </form>
         </section>}
         <section className="cards" id="cards">
-          {profileLoading ? <p style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
+          {profileLoading ? Array.from({ length: 6 }, (_, index) => <article key={`skeleton-${index}`} className="card skeleton-card" aria-hidden="true"><div className="skeleton skeleton-avatar" /><div className="skeleton skeleton-line" /><div className="skeleton skeleton-line short" /><div className="skeleton skeleton-block" /></article>) : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
               {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || 'K').charAt(0).toUpperCase()}</div>}
               <h3>{profile.display_name || profile.username}</h3><span className="tag">@{profile.username}</span>
               <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
-              <button type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
+              <button type="button" onClick={() => openCreatorProfile(profile)}>Lihat profil</button>
             </article>
           ))}
           {!profileLoading && filteredProfiles.length === 0 && <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>
@@ -472,7 +565,7 @@ export function App() {
             }
           }}
         >
-          <div className="dialog">
+          <div className="dialog" tabIndex={-1}>
             <button
               className="close"
               id="closeModal"
@@ -658,18 +751,19 @@ export function App() {
       {selectedProfile && (
         <div
           className="modal"
+          id="creatorDialog"
           role="dialog"
           aria-modal="true"
           aria-labelledby="creatorDialogTitle"
-          onClick={() => setSelectedProfile(null)}
+          onClick={closeCreatorProfile}
         >
-          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
+          <div className="alert-dialog" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
             {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{width:88,height:88,borderRadius:18,display:'grid',placeItems:'center'}}>👤</div>}
             <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
             <span className="tag">@{selectedProfile.username}</span>
             <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
             <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
-            <button type="button" onClick={() => setSelectedProfile(null)}>
+            <button type="button" onClick={closeCreatorProfile}>
               Mengerti
             </button>
           </div>
@@ -680,12 +774,14 @@ export function App() {
       {alertInfo && (
         <div
           className="modal"
+          id="alertDialog"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="alertDialogTitle"
           onClick={() => setAlertInfo(null)}
         >
-          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Pemberitahuan</h3>
+          <div className="alert-dialog" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+            <h3 id="alertDialogTitle">Pemberitahuan</h3>
             <p>{alertInfo}</p>
             <button type="button" onClick={() => setAlertInfo(null)}>
               Mengerti
