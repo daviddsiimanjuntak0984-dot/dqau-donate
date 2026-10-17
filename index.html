@@ -14,9 +14,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html, body { min-height: 100%; background: #0b0912; }
+    .app-boot-loader { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #ded7ef; font: 500 14px/1.5 system-ui, sans-serif; }
+    .app-boot-spinner { width: 30px; height: 30px; border: 3px solid rgba(196,181,253,.2); border-top-color: #a78bfa; border-radius: 50%; animation: dqua-boot-spin .8s linear infinite; }
+    @keyframes dqua-boot-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .app-boot-spinner { animation: none; border-top-color: #a78bfa; } }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="app-boot-loader" role="status" aria-live="polite">
+      <span class="app-boot-spinner" aria-hidden="true"></span>
+      <p>Memuat Dqua Donate…</p>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
