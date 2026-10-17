@@ -360,7 +360,7 @@ export function App() {
       display_name: profileName.trim(),
       bio: bio.trim(),
       avatar_url: avatarUrl.trim() || null,
-    }, { returning: 'representation' });
+    });
     if (error) {
       setProfileMessage((error as any).code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + (error as any).message);
     } else {
