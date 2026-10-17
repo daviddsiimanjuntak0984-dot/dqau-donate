@@ -1,175 +1,146 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase, isSupabaseConfigured } from './supabase';
 
-interface DonationEvent {
-  id?: string;
-  donor_name?: string;
-  amount?: number;
-  message?: string;
-  creator_id?: string;
-  creator_username?: string;
-  created_at?: string;
+interface AlertPayload {
+  donor_name: string;
+  amount: number;
+  message: string;
+  isTest?: boolean;
 }
 
-// OverlayView: a minimal, focused UI suitable for OBS Browser Source.
+/**
+ * Transparent OBS Browser Source.
+ * Live donation events are intentionally not subscribed here until the
+ * database schema and per-creator authorization can be verified.
+ */
 export function OverlayView() {
-  const params = new URLSearchParams(window.location.search);
-  const creator = params.get('creator') || 'unknown';
-  const token = params.get('token') || '';
-
-  const [lastAlert, setLastAlert] = useState<DonationEvent | null>(null);
+  const [alert, setAlert] = useState<AlertPayload | null>(null);
   const [visible, setVisible] = useState(false);
+  const hideTimer = useRef<number | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Listen for postMessage test events
   useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      // accept only messages that look like our test shape
-      if (e.data && e.data.type === 'TEST_ALERT' && e.data.payload) {
-        showAlert(e.data.payload as DonationEvent);
-      }
-    }
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source === window) return;
+      const data = event.data as { type?: string; payload?: AlertPayload } | null;
+      if (data?.type !== 'DQUA_TEST_ALERT' || !data.payload) return;
+      if (typeof data.payload.donor_name !== 'string' || typeof data.payload.amount !== 'number') return;
 
-  // Supabase realtime: listen to 'donations' inserts if configured.
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    let subscription: any = null;
-    try {
-      subscription = supabase
-        .channel('public:donations')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'donations' }, (payload) => {
-          const newRow = payload.new as DonationEvent;
-          // Optionally filter by creator username/id if payload carries that info.
-          if (!newRow) return;
-          // If creator param provided, try to match by creator_username or creator_id
-          if (creator && creator !== 'unknown') {
-            if (newRow.creator_username && newRow.creator_username !== creator) return;
-            if (newRow.creator_id && newRow.creator_id !== creator) return;
-          }
-          showAlert(newRow);
-        })
-        .subscribe();
-    } catch (err) {
-      // ignore realtime subscription errors gracefully
-      // eslint-disable-next-line no-console
-      console.warn('Overlay realtime subscribe failed', err);
-    }
-    return () => {
-      if (subscription) {
-        void supabase.removeChannel(subscription);
+      setAlert({ ...data.payload, isTest: true });
+      setVisible(true);
+      if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
+      hideTimer.current = window.setTimeout(() => setVisible(false), 5200);
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        void audioRef.current.play().catch(() => undefined);
       }
     };
-  }, [creator]);
 
-  function showAlert(ev: DonationEvent) {
-    setLastAlert(ev);
-    setVisible(true);
-    // play sound if available
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      void audioRef.current.play().catch(() => {});
-    }
-    // hide after 5 seconds
-    setTimeout(() => setVisible(false), 5200);
-  }
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
+    };
+  }, []);
 
   return (
-    <div className="overlay-root" style={{ background: 'transparent' }}>
+    <main className="overlay-root" aria-label="Dqua Donate alert overlay">
       <audio ref={audioRef} src="/alert-chime.mp3" preload="auto" />
-      <div className={`overlay-alert ${visible ? 'is-visible' : ''}`} role="status" aria-live="polite">
-        <div className="oa-left">
-          <div className="oa-avatar">✦</div>
-        </div>
+      <section className={`overlay-alert ${visible ? 'is-visible' : ''}`} role="status" aria-live="polite">
+        <div className="oa-left" aria-hidden="true">✦</div>
         <div className="oa-body">
-          <div className="oa-line oa-name">{lastAlert?.donor_name || 'Penggemar'}</div>
-          <div className="oa-line oa-amount">{typeof lastAlert?.amount === 'number' ? `Rp ${lastAlert.amount}` : ''}</div>
-          <div className="oa-line oa-message">{lastAlert?.message || ''}</div>
+          {alert?.isTest && <div className="oa-test-label">PREVIEW / TEST</div>}
+          <div className="oa-line oa-name">{alert?.donor_name || 'Dukung Kreator'}</div>
+          <div className="oa-line oa-amount">
+            {alert ? `Rp ${alert.amount.toLocaleString('id-ID')}` : ''}
+          </div>
+          <div className="oa-line oa-message">{alert?.message || ''}</div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
-// OverlaySettings: shown to logged-in creators to manage overlay URL & test alerts.
 export function OverlaySettings({ userId, username }: { userId: string; username: string }) {
-  const storageKey = `dqau:overlay:token:${userId}`;
-  const [token, setToken] = useState<string>(() => localStorage.getItem(storageKey) || '');
-  const [overlayWin, setOverlayWin] = useState<Window | null>(null);
-  const [recent, setRecent] = useState<DonationEvent[]>([]);
-  const [loadingRecent, setLoadingRecent] = useState(false);
-  const [savingToken, setSavingToken] = useState(false);
+  const storageKey = `dqua-overlay-preview:${userId}`;
+  const [token, setToken] = useState('');
+  const [overlayWindow, setOverlayWindow] = useState<Window | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
-    localStorage.setItem(storageKey, token);
-  }, [token]);
-
-  const genToken = () => {
     try {
-      const id = (crypto as any).randomUUID?.() || Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
-      setToken(id);
+      let saved = window.localStorage.getItem(storageKey);
+      if (!saved) {
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        saved = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        window.localStorage.setItem(storageKey, saved);
+      }
+      setToken(saved);
     } catch {
-      setToken(String(Date.now()));
+      setToken('');
     }
-  };
+  }, [storageKey]);
+
+  const overlayUrl = `${window.location.origin}/?overlay=1&creator=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
 
   const openOverlay = () => {
-    const url = `${window.location.origin}/?overlay=1&creator=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
-    const w = window.open(url, `_blank`, 'toolbar=0,location=0,menubar=0,width=800,height=450');
-    setOverlayWin(w);
+    if (!token) return;
+    const opened = window.open(overlayUrl, '_blank', 'popup,width=960,height=540');
+    if (opened) setOverlayWindow(opened);
   };
 
   const testAlert = () => {
-    if (!overlayWin || overlayWin.closed) {
-      // open first, then send after short delay
-      openOverlay();
-      setTimeout(() => {
-        overlayWin?.postMessage({ type: 'TEST_ALERT', payload: { donor_name: 'Tester', amount: 20000, message: 'Ini test alert' } }, '*');
-      }, 600);
+    const payload: AlertPayload = {
+      donor_name: 'Pendukung Demo',
+      amount: 20000,
+      message: 'Ini hanya test alert — bukan transaksi nyata.',
+      isTest: true,
+    };
+    let target = overlayWindow;
+    if (!target || target.closed) {
+      target = window.open(overlayUrl, '_blank', 'popup,width=960,height=540');
+      if (target) setOverlayWindow(target);
+    }
+    if (!target) {
+      window.alert('Izinkan pop-up untuk menguji overlay Dqua Donate.');
       return;
     }
-    overlayWin.postMessage({ type: 'TEST_ALERT', payload: { donor_name: 'Tester', amount: 20000, message: 'Ini test alert' } }, '*');
+    window.setTimeout(() => {
+      try {
+        target?.postMessage({ type: 'DQUA_TEST_ALERT', payload }, window.location.origin);
+      } catch {
+        // The overlay can be reopened and tested again if the browser blocks the message.
+      }
+    }, 900);
   };
 
-  const fetchRecent = async () => {
-    setLoadingRecent(true);
-    if (!isSupabaseConfigured) { setLoadingRecent(false); return; }
+  const copyUrl = async () => {
     try {
-      const { data, error } = await supabase.from('donations').select('*').eq('creator_id', userId).order('created_at', { ascending: false }).limit(10);
-      if (!error && data) setRecent(data as DonationEvent[]);
-    } catch (err) {
-      // ignore
-    } finally { setLoadingRecent(false); }
+      await navigator.clipboard.writeText(overlayUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt('Salin URL overlay ini secara manual:', overlayUrl);
+    }
   };
-
-  useEffect(() => { void fetchRecent(); }, []);
 
   return (
-    <div className="profile-editor">
-      <h3>Overlay Donasi</h3>
-      <p>Buat URL overlay untuk digunakan sebagai Browser Source di OBS. Gunakan token ini untuk membatasi akses.</p>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-        <input className="search" value={token} onChange={e => setToken(e.target.value)} placeholder="Token overlay (simpan aman)" />
-        <button className="btn btn-ghost" type="button" onClick={genToken}>Buat token</button>
+    <section className="overlay-settings" aria-labelledby="overlaySettingsTitle">
+      <div className="overlay-settings-heading">
+        <span className="overlay-settings-icon" aria-hidden="true">✦</span>
+        <div>
+          <h3 id="overlaySettingsTitle">Live Streaming Overlay</h3>
+          <p>Tambahkan URL ini sebagai Browser Source di OBS Studio. Saat ini tersedia preview/test alert; event donasi nyata belum terhubung.</p>
+        </div>
+      </div>
+      <label htmlFor="dquaOverlayUrl">URL Browser Source</label>
+      <input id="dquaOverlayUrl" className="search" readOnly value={token ? overlayUrl : 'Overlay belum siap di browser ini'} />
+      <div className="overlay-settings-actions">
         <button className="btn btn-primary" type="button" onClick={openOverlay} disabled={!token}>Buka overlay</button>
+        <button className="btn btn-ghost" type="button" onClick={copyUrl} disabled={!token}>{copied ? 'URL disalin ✓' : 'Salin URL'}</button>
+        <button className="btn btn-ghost" type="button" onClick={testAlert} disabled={!token}>Test Alert (Preview)</button>
       </div>
-
-      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-        <button className="btn btn-primary" onClick={testAlert} disabled={!token}>Test Alert (Preview)</button>
-        <a className="btn btn-ghost" href={`${window.location.origin}/?overlay=1&creator=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`} target="_blank" rel="noreferrer">Copy URL</a>
-      </div>
-
-      <h4 style={{ marginTop: 16 }}>Recent donations</h4>
-      {loadingRecent ? <p>Memuat...</p> : recent.length === 0 ? <p>Tidak ada donasi tercatat.</p> : (
-        <ul>
-          {recent.map(d => (
-            <li key={d.id}>{d.donor_name} — Rp {d.amount} — {d.message}</li>
-          ))}
-        </ul>
-      )}
-    </div>
+      <p className="overlay-settings-note">Token ini belum divalidasi oleh backend dan tidak membatasi akses. Jangan gunakan sebagai URL donasi live sampai validasi token dan pengiriman event aman selesai dibuat.</p>
+    </section>
   );
 }
