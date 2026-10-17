@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { DonationForm } from './DonationForm';
 
@@ -181,7 +181,9 @@ export function CreatorSocialProfile({
   const [followingCount, setFollowingCount] = useState(0);
   const [following, setFollowing] = useState(false);
   const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [postsCount, setPostsCount] = useState(0);
   const [stories, setStories] = useState<SocialStory[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [postText, setPostText] = useState('');
@@ -217,13 +219,14 @@ export function CreatorSocialProfile({
       viewerId && viewerId !== profile.id
         ? supabase.from('creator_follows').select('follower_id').eq('follower_id', viewerId).eq('following_id', profile.id).maybeSingle()
         : Promise.resolve({ data: null, error: null, count: null, status: 200, statusText: 'OK' } as any),
-      supabase.from('creator_posts').select('id, author_id, content, media_url, media_kind, created_at').eq('author_id', profile.id).order('created_at', { ascending: false }).limit(40),
+      supabase.from('creator_posts').select('id, author_id, content, media_url, media_kind, created_at', { count: 'exact' }).eq('author_id', profile.id).order('created_at', { ascending: false }).limit(40),
       supabase.from('creator_stories').select('id, creator_id, media_url, media_kind, created_at, expires_at').eq('creator_id', profile.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(20),
     ]);
-    const tableError = followersRes.error || followingRes.error || postsRes.error || storiesRes.error;
+    const tableError = followersRes.error || followingRes.error || followRes.error || postsRes.error || storiesRes.error;
     if (tableError) {
       setFeatureNotice('Fitur pengikut/postingan belum aktif di database ini. Migration fitur sosial perlu diterapkan terlebih dahulu.');
       setPosts([]);
+      setPostsCount(0);
       setStories([]);
       setLoading(false);
       return;
@@ -232,6 +235,7 @@ export function CreatorSocialProfile({
     setFollowingCount(followingRes.count ?? 0);
     setFollowing(Boolean(followRes.data));
     const rows = (postsRes.data || []) as Array<Omit<SocialPost, 'likes_count' | 'comments_count' | 'liked_by_me'>>;
+    setPostsCount(postsRes.count ?? rows.length);
     const postIds = rows.map((row) => row.id);
     if (!postIds.length) {
       setPosts([]);
@@ -258,6 +262,13 @@ export function CreatorSocialProfile({
   }, [profile.id, viewerId]);
 
   useEffect(() => { void loadSocialData(); }, [loadSocialData]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>('button, a[href], input, textarea');
+    (firstControl || dialogRef.current)?.focus({ preventScroll: true });
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [profile.id]);
   useEffect(() => () => {
     if (postPreview && postPreview.startsWith('blob:')) URL.revokeObjectURL(postPreview);
   }, [postPreview]);
@@ -394,6 +405,7 @@ export function CreatorSocialProfile({
     const { error } = await supabase.from('creator_posts').delete().eq('id', post.id).eq('author_id', viewerId || '');
     if (error) { setFeatureNotice('Postingan belum berhasil dihapus.'); return; }
     setPosts((current) => current.filter((item) => item.id !== post.id));
+    setPostsCount((count) => Math.max(0, count - 1));
     setFeatureNotice('Postingan berhasil dihapus.');
   };
 
@@ -433,7 +445,6 @@ export function CreatorSocialProfile({
         creator_id: viewerId,
         media_url: uploaded.url,
         media_kind: uploaded.kind,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       });
       if (error) {
         await supabase.storage.from('creator-media').remove([uploaded.path]);
@@ -467,7 +478,38 @@ export function CreatorSocialProfile({
 
   return (
     <div className="modal profile-view-modal" role="dialog" aria-modal="true" aria-labelledby="creatorSocialTitle" onClick={onClose}>
-      <div className="profile-view-dialog creator-social-dialog" onClick={(event) => event.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="profile-view-dialog creator-social-dialog"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            if (activeStory) setActiveStory(null);
+            else if (connectionType) setConnectionType(null);
+            else onClose();
+          }
+          if (event.key === 'Tab' && dialogRef.current) {
+            const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+              .filter((element) => element.offsetParent !== null);
+            if (!focusable.length) {
+              event.preventDefault();
+              dialogRef.current.focus();
+            } else {
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }
+          }
+        }}
+      >
         <button className="close profile-view-close" type="button" aria-label="Tutup profil" onClick={onClose}>×</button>
         <div className="profile-view-cover">
           {profile.cover_url ? <img src={profile.cover_url} alt={'Sampul ' + (profile.display_name || profile.username)} /> : <div className="profile-view-cover-placeholder"><span>✦</span><span>DQUA CREATOR</span></div>}
@@ -490,7 +532,7 @@ export function CreatorSocialProfile({
         <div className="creator-social-stats">
           <button type="button" onClick={() => void showConnections('followers')}><strong>{formatCount(followersCount)}</strong><span>Pengikut</span></button>
           <button type="button" onClick={() => void showConnections('following')}><strong>{formatCount(followingCount)}</strong><span>Mengikuti</span></button>
-          <button type="button" onClick={() => setTab('posting')}><strong>{formatCount(posts.length)}</strong><span>Postingan</span></button>
+          <button type="button" onClick={() => setTab('posting')}><strong>{formatCount(postsCount)}</strong><span>Postingan</span></button>
         </div>
         <div className="creator-story-strip">
           {ownProfile && <label className="creator-story-bubble creator-story-create" title="Tambah cerita"><span>＋</span><small>Tambah cerita<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm" onChange={createStory} disabled={storyBusy} /></small></label>}
