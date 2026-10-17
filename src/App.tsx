@@ -776,11 +776,6 @@ export function App() {
                 const ownProfile = profiles.find((item) => item.id === user.id);
                 if (ownProfile) setSelectedProfile(ownProfile);
               }}
-              onNeedLogin={() => {
-                setAuthMode('login');
-                setAuthMessage({ text: '', isError: false });
-                setModalOpen(true);
-              }}
             />
             <OverlaySettings userId={user.id} username={username || user.email || user.id} />
           </section>
@@ -1047,6 +1042,7 @@ export function App() {
         <CreatorSocialProfile
           profile={selectedProfile}
           viewerId={user?.id || null}
+          viewerHasProfile={Boolean(user && profiles.some((item) => item.id === user.id))}
           onClose={() => setSelectedProfile(null)}
           onNeedLogin={() => {
             setAuthMode('login');
