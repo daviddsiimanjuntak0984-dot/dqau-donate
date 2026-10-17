@@ -585,7 +585,7 @@ export function App() {
       else {
         const legacy = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
         if (!legacy.error && legacy.data) {
-          setProfiles(legacy.data.map((profile) => ({ ...profile, cover_url: null, album_urls: [], social_links: {}, is_public: true, updated_at: profile.created_at })) as CreatorProfile[]);
+          setProfiles(legacy.data.map((profile) => ({ ...profile, cover_url: null, album_urls: [], social_links: {}, category: '', location: '', is_public: true, updated_at: profile.created_at })) as CreatorProfile[]);
         }
       }
     }
@@ -781,7 +781,7 @@ export function App() {
                 <p>{profile.bio || 'Kreator ini belum menambahkan bio.'}</p>
                 <div className="creator-card-actions">
                   <span className="creator-card-media-count">{profile.album_urls?.length || 0} foto album</span>
-                  <button className="btn btn-ghost" type="button" onClick={() => { setSelectedProfileTab('profil'); setSelectedProfile(profile); }}>Lihat profil</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
                 </div>
               </div>
             </article>
