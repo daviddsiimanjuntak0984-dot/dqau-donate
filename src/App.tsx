@@ -128,6 +128,7 @@ export function App() {
   const [bio, setBio] = useState('');
   const [creatorCategory, setCreatorCategory] = useState('');
   const [creatorLocation, setCreatorLocation] = useState('');
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -204,6 +205,7 @@ export function App() {
       setBio('');
       setCreatorCategory('');
       setCreatorLocation('');
+      setSocialLinks({});
       setAvatarUrl('');
       setAvatarPreview(null);
       setCoverUrl('');
@@ -214,11 +216,11 @@ export function App() {
     const loadMyProfile = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, display_name, bio, avatar_url, cover_url, album_urls, category, location')
+        .select('username, display_name, bio, avatar_url, cover_url, album_urls, social_links, category, location')
         .eq('id', user.id)
         .maybeSingle();
       let profile = data;
-      if (error && /cover_url|album_urls|category|location|schema cache/i.test(error.message)) {
+      if (error && /cover_url|album_urls|social_links|category|location|schema cache/i.test(error.message)) {
         const legacy = await supabase
           .from('profiles')
           .select('username, display_name, bio, avatar_url, created_at')
@@ -228,7 +230,7 @@ export function App() {
           setProfileMessage('Profil belum dapat dimuat. Periksa konfigurasi database.');
           return;
         }
-        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [], category: '', location: '' } : null;
+        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [], social_links: {}, category: '', location: '' } : null;
         setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Simpan perubahan media setelah migration diterapkan.');
       } else if (error) {
         setProfileMessage('Gagal memuat profil. Periksa izin akses database.');
@@ -240,6 +242,7 @@ export function App() {
         setBio(profile.bio || '');
         setCreatorCategory(profile.category || '');
         setCreatorLocation(profile.location || '');
+        setSocialLinks(profile.social_links && typeof profile.social_links === 'object' ? profile.social_links : {});
         setAvatarUrl(profile.avatar_url || '');
         setAvatarPreview(profile.avatar_url || null);
         setCoverUrl(profile.cover_url || '');
@@ -555,6 +558,7 @@ export function App() {
       bio: bio.trim(),
       category: creatorCategory.trim(),
       location: creatorLocation.trim(),
+      social_links: Object.fromEntries(Object.entries(socialLinks).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)),
       avatar_url: avatarUrl.trim(),
       cover_url: coverUrl.trim(),
       album_urls: albumUrls,
@@ -716,6 +720,21 @@ export function App() {
 
               <label htmlFor="creatorLocation">Lokasi (opsional)</label>
               <input id="creatorLocation" value={creatorLocation} onChange={(event) => setCreatorLocation(event.target.value)} maxLength={80} placeholder="Kota atau wilayah yang ingin ditampilkan" />
+
+              <label>Link sosial (opsional)</label>
+              <div className="creator-social-editor-grid">
+                {([
+                  ['website', 'Website / portofolio'],
+                  ['instagram', 'Instagram'],
+                  ['tiktok', 'TikTok'],
+                  ['youtube', 'YouTube'],
+                ] as const).map(([key, label]) => (
+                  <div key={key}>
+                    <label htmlFor={'creatorLink-' + key}>{label}</label>
+                    <input id={'creatorLink-' + key} type="url" value={socialLinks[key] || ''} onChange={(event) => setSocialLinks((current) => ({ ...current, [key]: event.target.value }))} maxLength={300} placeholder={key === 'website' ? 'https://website-kamu.com' : 'https://' + key + '.com/username'} />
+                  </div>
+                ))}
+              </div>
 
               <label htmlFor="creatorAvatar">Foto profil</label>
               <div className="media-editor-row">
