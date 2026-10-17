@@ -145,6 +145,7 @@ export function App() {
   const [phoneCode, setPhoneCode] = useState('');
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [alertInfo, setAlertInfo] = useState<string | null>(null);
+  const [selectedCreator, setSelectedCreator] = useState<CreatorCard | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -365,7 +366,7 @@ export function App() {
               <button
                 type="button"
                 className={creator.type === 'profile' ? 'profileButton' : 'supportButton'}
-                onClick={() => setAlertInfo('Fitur profil kreator dan donasi belum aktif.')}
+                onClick={() => setSelectedCreator(creator)}
               >
                 {creator.buttonLabel}
               </button>
@@ -604,6 +605,31 @@ export function App() {
             <p className="muted-note">
               Jangan gunakan kata sandi yang sama dengan akun penting kamu. Login sosial perlu diaktifkan di Supabase terlebih dahulu.
             </p>
+          </div>
+        </div>
+      )}
+
+      {selectedCreator && (
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="creatorDialogTitle"
+          onClick={() => setSelectedCreator(null)}
+        >
+          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="avatar" style={{ margin: "0 auto 12px" }}>{selectedCreator.avatar}</div>
+            <h3 id="creatorDialogTitle">{selectedCreator.name}</h3>
+            <span className="tag">{selectedCreator.tag}</span>
+            <p>{selectedCreator.desc}</p>
+            <p>
+              {selectedCreator.type === 'support'
+                ? 'Fitur donasi belum aktif. Jangan transfer uang melalui halaman ini.'
+                : 'Profil kreator belum aktif sepenuhnya. Informasi ini masih berupa contoh.'}
+            </p>
+            <button type="button" onClick={() => setSelectedCreator(null)}>
+              Mengerti
+            </button>
           </div>
         </div>
       )}
