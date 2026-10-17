@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
 
+interface CreatorProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; }
+
 interface CreatorCard {
   id: string;
   avatar: string;
@@ -22,39 +24,6 @@ interface PlatformCard {
   link: string;
   linkLabel: string;
 }
-
-const CREATORS: CreatorCard[] = [
-  {
-    id: 'kreator-baru',
-    avatar: '🎨',
-    name: 'Kreator Baru',
-    tag: 'Kreator komunitas',
-    desc: 'Tempat untuk memperkenalkan karya dan membangun komunitas.',
-    searchTerms: 'kreator baru umum',
-    buttonLabel: 'Lihat profil',
-    type: 'profile',
-  },
-  {
-    id: 'ilustrator',
-    avatar: '🖌️',
-    name: 'Ilustrator',
-    tag: 'Seni & desain',
-    desc: 'Ruang apresiasi bagi karya ilustrasi dan desain digital.',
-    searchTerms: 'ilustrasi seni desain',
-    buttonLabel: 'Dukung kreator',
-    type: 'support',
-  },
-  {
-    id: 'gamer',
-    avatar: '🎮',
-    name: 'Gamer',
-    tag: 'Gaming & streaming',
-    desc: 'Dukung kreator gaming untuk terus berkarya dan menghibur.',
-    searchTerms: 'gaming game streamer',
-    buttonLabel: 'Dukung kreator',
-    type: 'support',
-  },
-];
 
 const PLATFORMS: PlatformCard[] = [
   {
@@ -145,9 +114,24 @@ export function App() {
   const [phoneCode, setPhoneCode] = useState('');
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [alertInfo, setAlertInfo] = useState<string | null>(null);
-  const [selectedCreator, setSelectedCreator] = useState<CreatorCard | null>(null);
+  const [profiles, setProfiles] = useState<CreatorProfile[]>([]);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileName, setProfileName] = useState('');
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
 
   useEffect(() => {
+    const loadProfiles = async () => {
+      setProfileLoading(true);
+      const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+      if (!error && data) setProfiles(data as CreatorProfile[]);
+      setProfileLoading(false);
+    };
+    void loadProfiles();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null);
     });
@@ -160,6 +144,15 @@ export function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); return; }
+    const loadMyProfile = async () => {
+      const { data } = await supabase.from('profiles').select('username, display_name, bio, avatar_url').eq('id', user.id).maybeSingle();
+      if (data) { setProfileName(data.display_name || ''); setUsername(data.username || ''); setBio(data.bio || ''); setAvatarUrl(data.avatar_url || ''); }
+    };
+    void loadMyProfile();
+  }, [user]);
 
   const handleAccountClick = async () => {
     if (user) {
@@ -298,16 +291,26 @@ export function App() {
     }
   };
 
-  const filteredCreators = CREATORS.filter((c) => {
-    const query = search.toLowerCase().trim();
-    if (!query) return true;
-    return (
-      c.name.toLowerCase().includes(query) ||
-      c.tag.toLowerCase().includes(query) ||
-      c.desc.toLowerCase().includes(query) ||
-      c.searchTerms.toLowerCase().includes(query)
-    );
+  const filteredProfiles = profiles.filter((profile) => {
+    const q = search.toLowerCase().trim();
+    return !q || [profile.username, profile.display_name, profile.bio].some(v => (v || '').toLowerCase().includes(q));
   });
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const cleanUsername = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
+    setSavingProfile(true); setProfileMessage('');
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null }, { onConflict: 'id' });
+    if (error) setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + error.message);
+    else {
+      setProfileMessage('Profil berhasil disimpan.');
+      const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+      if (data) setProfiles(data as CreatorProfile[]);
+    }
+    setSavingProfile(false);
+  };
 
   const scrollToCreators = () => {
     const elem = document.getElementById('kreator');
@@ -356,27 +359,30 @@ export function App() {
           placeholder="Cari nama atau kategori kreator..."
         />
 
+        {user && <section className="profile-editor">
+          <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
+          <form onSubmit={saveProfile}>
+            <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama tampilan" />
+            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="nama_kamu" />
+            <label htmlFor="creatorBio">Bio</label><textarea id="creatorBio" value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={3} placeholder="Ceritakan tentang karya kamu" />
+            <label htmlFor="creatorAvatar">URL foto profil (opsional)</label><input id="creatorAvatar" type="url" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." />
+            <button type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
+            {profileMessage && <p className="message" role="status">{profileMessage}</p>}
+          </form>
+        </section>}
         <section className="cards" id="cards">
-          {filteredCreators.map((creator) => (
-            <article key={creator.id} className="card" data-search={creator.searchTerms}>
-              <div className="avatar">{creator.avatar}</div>
-              <h3>{creator.name}</h3>
-              <span className="tag">{creator.tag}</span>
-              <p>{creator.desc}</p>
-              <button
-                type="button"
-                className={creator.type === 'profile' ? 'profileButton' : 'supportButton'}
-                onClick={() => setSelectedCreator(creator)}
-              >
-                {creator.buttonLabel}
-              </button>
+          {profileLoading ? <p style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
+            <article key={profile.id} className="card creator-profile-card">
+              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username).slice(0,1).toUpperCase()}</div>}
+              <h3>{profile.display_name || profile.username}</h3><span className="tag">@{profile.username}</span>
+              <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
+              <button type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
             </article>
           ))}
-          {filteredCreators.length === 0 && (
-            <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--muted)', padding: '24px' }}>
-              Tidak ada kreator yang cocok dengan pencarian "{search}".
-            </p>
-          )}
+          {!profileLoading && filteredProfiles.length === 0 && <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>
+            <h3>{search ? 'Profil tidak ditemukan' : 'Belum ada profil kreator'}</h3>
+            <p>{search ? 'Coba kata kunci lain.' : 'Profil nyata akan muncul setelah kreator mendaftar dan menyimpan profilnya. Tidak ada kartu contoh.'}</p>
+          </div>}
         </section>
 
         <h2 className="section-title" id="komunitas">Komunitas & kanal kreator</h2>
@@ -609,24 +615,20 @@ export function App() {
         </div>
       )}
 
-      {selectedCreator && (
+      {selectedProfile && (
         <div
           className="modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="creatorDialogTitle"
-          onClick={() => setSelectedCreator(null)}
+          onClick={() => setSelectedProfile(null)}
         >
           <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="avatar" style={{ margin: "0 auto 12px" }}>{selectedCreator.avatar}</div>
-            <h3 id="creatorDialogTitle">{selectedCreator.name}</h3>
-            <span className="tag">{selectedCreator.tag}</span>
-            <p>{selectedCreator.desc}</p>
-            <p>
-              {selectedCreator.type === 'support'
-                ? 'Fitur donasi belum aktif. Jangan transfer uang melalui halaman ini.'
-                : 'Profil kreator belum aktif sepenuhnya. Informasi ini masih berupa contoh.'}
-            </p>
+            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{ margin: "0 auto 12px" }}>{(selectedProfile.display_name || selectedProfile.username).slice(0,1).toUpperCase()}</div>}
+            <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
+            <span className="tag">@{selectedProfile.username}</span>
+            <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
+            <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
             <button type="button" onClick={() => setSelectedCreator(null)}>
               Mengerti
             </button>
