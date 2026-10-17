@@ -565,7 +565,7 @@ export function App() {
       updated_at: new Date().toISOString(),
     });
     let savedWithoutMediaColumns = false;
-    if (error && /cover_url|album_urls|category|location|updated_at|schema cache/i.test(error.message)) {
+    if (error && /cover_url|album_urls|social_links|category|location|updated_at|schema cache/i.test(error.message)) {
       // Let basic profile details remain editable when preview is connected to
       // a database that has not applied the additive media migration yet.
       const legacySave = await supabase.from('profiles').upsert({
