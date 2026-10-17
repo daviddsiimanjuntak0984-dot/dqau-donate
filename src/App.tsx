@@ -541,6 +541,30 @@ export function App() {
           ))}
         </section>
 
+        <h2 className="section-title" id="bantuan">Bantuan & FAQ</h2>
+        <section className="faq-list" aria-label="Pertanyaan yang sering diajukan">
+          <details className="faq-item">
+            <summary>Apakah donasi dan pencairan dana sudah aktif?</summary>
+            <p>Belum. Website ini belum memproses pembayaran, donasi QRIS/e-wallet, atau pencairan dana. Jangan mengirim uang melalui halaman ini.</p>
+          </details>
+          <details className="faq-item">
+            <summary>Bagaimana cara membuat profil kreator?</summary>
+            <p>Masuk atau daftar menggunakan email setelah Supabase dikonfigurasi. Isi username unik, nama tampilan, bio, lalu tekan Simpan profil.</p>
+          </details>
+          <details className="faq-item">
+            <summary>Bagaimana cara mengganti foto profil?</summary>
+            <p>Pilih gambar JPG, PNG, atau WebP berukuran maksimal 2MB. Upload memerlukan bucket Storage bernama avatars dan kebijakan yang sesuai di Supabase.</p>
+          </details>
+          <details className="faq-item">
+            <summary>Mengapa saya tidak bisa masuk atau daftar?</summary>
+            <p>Pastikan variabel VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY sudah diatur, metode email aktif, dan URL situs sudah dimasukkan ke konfigurasi autentikasi Supabase.</p>
+          </details>
+          <details className="faq-item">
+            <summary>Apakah profil saya bisa dilihat pengunjung lain?</summary>
+            <p>Profil yang berhasil disimpan dapat ditampilkan sesuai kebijakan akses database. Admin proyek perlu memeriksa aturan Row Level Security (RLS) sebelum situs dipublikasikan.</p>
+          </details>
+        </section>
+
         <p className="notice">
           Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini sampai integrasi pembayaran disiapkan.
         </p>
