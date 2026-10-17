@@ -3,18 +3,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-const hasSupabaseConfig = Boolean(configuredUrl && configuredAnonKey);
 
-if (!hasSupabaseConfig && import.meta.env.DEV) {
-  console.warn('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di file .env.local.');
+// Public browser configuration for the Dqua Donate Supabase project.
+// Hosting environment variables override these defaults. The anon key is intended
+// for browser use; never put a service_role or secret key in frontend code.
+const supabaseUrl = configuredUrl || 'https://aaqfamoedywfjidwupou.supabase.co';
+const supabaseAnonKey = configuredAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhcWZhbW9lZHl3ZmppZHd1cG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3NTU4MzMsImV4cCI6MjEwNzMzMTgzM30.HqrNELJg33cNcOui5VAmt-lF5stXcZhxRd0We_YUmLk';
+
+if ((!configuredUrl || !configuredAnonKey) && import.meta.env.DEV) {
+  console.info('Using the default public Dqua Donate Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to override it.');
 }
 
-// Use non-secret placeholders so the UI can still render when env vars are absent.
-// Requests will fail until real project values are configured. Never put service_role keys in a browser app.
-export const supabase = createClient(
-  configuredUrl || 'https://placeholder.supabase.co',
-  configuredAnonKey || 'missing-anon-key'
-);
-
-export const isSupabaseConfigured = hasSupabaseConfig;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export type AppSupabaseClient = SupabaseClient;
