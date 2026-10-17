@@ -552,3 +552,50 @@ body.dqua-overlay-mode { margin: 0 !important; }
 .creator-social-editor-grid label { font-size: 12px; color: var(--muted); }
 .creator-social-editor-grid input { width: 100%; min-width: 0; }
 @media (max-width: 560px) { .creator-social-editor-grid { grid-template-columns: minmax(0,1fr); gap: 8px; } }
+
+
+/* Tactile click feedback and keyboard focus for creator interactions. */
+button, .btn, a.platform-link, .creator-dashboard-link {
+  -webkit-tap-highlight-color: transparent;
+}
+button:active:not(:disabled),
+.btn:active:not(:disabled),
+a.platform-link:active,
+.creator-dashboard-link:active {
+  transform: translateY(1px) scale(.975);
+  filter: brightness(1.08);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 3px;
+}
+.creator-social-stats button,
+.creator-post-actions button,
+.creator-story-bubble,
+.profile-view-tabs button,
+.album-remove-button {
+  transition: transform 160ms ease, filter 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+.creator-social-stats button:active,
+.creator-post-actions button:active,
+.creator-story-bubble:active,
+.profile-view-tabs button:active,
+.album-remove-button:active {
+  transform: scale(.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled),
+  .btn:active:not(:disabled),
+  a.platform-link:active,
+  .creator-dashboard-link:active,
+  .creator-social-stats button:active,
+  .creator-post-actions button:active,
+  .creator-story-bubble:active,
+  .profile-view-tabs button:active,
+  .album-remove-button:active {
+    transform: none !important;
+  }
+}
