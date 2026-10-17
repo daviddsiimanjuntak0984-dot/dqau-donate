@@ -73,7 +73,7 @@ function safeReportedNames(value: unknown): string[] {
 
 const buildUrl = normalizeSupabaseUrl(BUILD_SUPABASE_URL);
 const buildKey = isPublicSupabaseClientKey(BUILD_SUPABASE_KEY)
-  ? BUILD_SUPABASE_KEY.trim()
+  ? (BUILD_SUPABASE_KEY as string).trim()
   : null;
 
 export let isSupabaseConfigured = Boolean(buildUrl && buildKey);
