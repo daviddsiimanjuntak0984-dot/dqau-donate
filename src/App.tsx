@@ -111,6 +111,8 @@ export function App() {
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
 
@@ -136,10 +138,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); return; }
+    if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); setAvatarPreview(null); return; }
     const loadMyProfile = async () => {
       const { data } = await supabase.from('profiles').select('username, display_name, bio, avatar_url').eq('id', user.id).maybeSingle();
-      if (data) { setProfileName(data.display_name || ''); setUsername(data.username || ''); setBio(data.bio || ''); setAvatarUrl(data.avatar_url || ''); }
+      if (data) { setProfileName(data.display_name || ''); setUsername(data.username || ''); setBio(data.bio || ''); setAvatarUrl(data.avatar_url || ''); setAvatarPreview(data.avatar_url || null); }
     };
     void loadMyProfile();
   }, [user]);
@@ -286,13 +288,50 @@ export function App() {
     return !q || [profile.username, profile.display_name, profile.bio].some(v => (v || '').toLowerCase().includes(q));
   });
 
+  const uploadAvatar = async (file: File) => {
+    if (!user) { setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah avatar.'); return null; }
+    if (!file.type.startsWith('image/')) { setProfileMessage('Hanya file gambar yang diizinkan.'); return null; }
+    if (file.size > 2 * 1024 * 1024) { setProfileMessage('Ukuran maksimal avatar 2MB.'); return null; }
+    setAvatarUploading(true);
+    setProfileMessage('Mengunggah avatar...');
+    try {
+      const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      const bucket = 'avatars';
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      const publicUrl = urlData?.publicUrl || '';
+      setAvatarUrl(publicUrl);
+      setAvatarPreview(publicUrl);
+      setProfileMessage('Avatar berhasil diunggah. Ingat untuk menyimpan profil.');
+      return publicUrl;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal mengunggah avatar.';
+      setProfileMessage(msg);
+      return null;
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) {
+      // quick client preview
+      const reader = new FileReader();
+      reader.onload = () => setAvatarPreview(String(reader.result));
+      reader.readAsDataURL(f);
+      void uploadAvatar(f);
+    }
+  };
+
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     const cleanUsername = username.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
     setSavingProfile(true); setProfileMessage('');
-    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null }, { onConflict: 'id' });
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null }, { returning: 'representation' });
     if (error) setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + error.message);
     else {
       setProfileMessage('Profil berhasil disimpan.');
@@ -352,10 +391,21 @@ export function App() {
         {user && <section className="profile-editor">
           <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
           <form onSubmit={saveProfile}>
-            <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama tampilan" />
-            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="nama_kamu" />
+            <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama yang akan ditampilkan" />
+            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="username_kamu" />
             <label htmlFor="creatorBio">Bio</label><textarea id="creatorBio" value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={3} placeholder="Ceritakan tentang karya kamu" />
-            <label htmlFor="creatorAvatar">URL foto profil (opsional)</label><input id="creatorAvatar" type="url" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." />
+
+            <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
+              {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
+              <div style={{ flex: 1 }}>
+                <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
+                <div style={{ marginTop: 6 }}>
+                  <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
+                </div>
+              </div>
+            </div>
+
             <button type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
             {profileMessage && <p className="message" role="status">{profileMessage}</p>}
           </form>
@@ -363,7 +413,7 @@ export function App() {
         <section className="cards" id="cards">
           {profileLoading ? <p style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
-              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username).slice(0,1).toUpperCase()}</div>}
+              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || 'K').charAt(0).toUpperCase()}</div>}
               <h3>{profile.display_name || profile.username}</h3><span className="tag">@{profile.username}</span>
               <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
               <button type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
@@ -399,7 +449,7 @@ export function App() {
         </section>
 
         <p className="notice">
-          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini.
+          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini sampai integrasi pembayaran disiapkan.
         </p>
       </main>
 
@@ -614,7 +664,7 @@ export function App() {
           onClick={() => setSelectedProfile(null)}
         >
           <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{ margin: "0 auto 12px" }}>{(selectedProfile.display_name || selectedProfile.username).slice(0,1).toUpperCase()}</div>}
+            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{width:88,height:88,borderRadius:18,display:'grid',placeItems:'center'}}>👤</div>}
             <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
             <span className="tag">@{selectedProfile.username}</span>
             <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
