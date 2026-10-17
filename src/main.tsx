@@ -3,23 +3,24 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './index.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Elemen root tidak ditemukan. Periksa index.html.');
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 
-// Register service worker for PWA installability and offline support
+// Register the service worker only on supported browsers; localhost and HTTPS are secure contexts.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => {
-        // eslint-disable-next-line no-console
-        console.log('Service worker registered.', reg);
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((registration) => {
+        if (import.meta.env.DEV) console.info('Dqau Donate service worker registered:', registration.scope);
       })
-      .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.warn('Service worker registration failed:', err);
+      .catch((error: unknown) => {
+        console.warn('Dqau Donate service worker registration failed:', error);
       });
-  });
+  }, { once: true });
 }
