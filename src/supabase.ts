@@ -1,17 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const hasSupabaseConfig = Boolean(configuredUrl && configuredAnonKey);
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  // Warn in development; do not expose secrets in code.
-  // The app will still initialize the client but operations will fail until env vars are set.
-  // Make sure to set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment or .env.
-  // Example .env.example is provided in the repo.
-  // NOTE: Never commit the Supabase service_role key or other secrets into the repo.
-  // This check avoids falling back to a hardcoded key.
+if (!hasSupabaseConfig) {
   // eslint-disable-next-line no-console
-  console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing. Supabase client may not work until configured.');
+  console.warn(
+    'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your local .env or hosting environment.'
+  );
 }
 
-export const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_ANON_KEY ?? '');
+// Use non-secret placeholders so the UI can still render when env vars are absent.
+// Requests will fail until real project values are configured. Never put service_role keys in a browser app.
+export const supabase = createClient(
+  configuredUrl || 'https://placeholder.supabase.co',
+  configuredAnonKey || 'missing-anon-key'
+);
+
+export const isSupabaseConfigured = hasSupabaseConfig;
