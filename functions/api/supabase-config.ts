@@ -94,7 +94,7 @@ export async function onRequestGet({ env }: PagesContext): Promise<Response> {
   // endpoint is deliberately non-cacheable so production/preview stay separate.
   return jsonResponse({
     configured: true,
-    url: new URL(rawUrl).toString().replace(/\/$/, ""),
-    anonKey: rawKey,
+    url: new URL(rawUrl as string).toString().replace(/\/$/, ""),
+    anonKey: rawKey as string,
   });
 }
