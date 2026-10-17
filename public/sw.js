@@ -38,15 +38,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response && response.ok) {
-            const responseCopy = response.clone();
-            event.waitUntil(
-              caches.open(CACHE_NAME)
-                .then((cache) => cache.put(request, responseCopy))
-                .catch(() => undefined)
-            );
-          }
-          return response;
+          if (!response || !response.ok) return response;
+          const responseCopy = response.clone();
+          return caches.open(CACHE_NAME)
+            .then((cache) => cache.put(request, responseCopy))
+            .then(() => response)
+            .catch(() => response);
         })
         .catch(async () => {
           const cachedPage = await caches.match(request);
@@ -63,15 +60,14 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then(async (cached) => {
       if (cached) return cached;
       const response = await fetch(request);
-      if (response && response.ok && requestUrl.pathname.startsWith('/assets/')) {
-        const responseCopy = response.clone();
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => cache.put(request, responseCopy))
-            .catch(() => undefined)
-        );
+      if (!response || !response.ok || !requestUrl.pathname.startsWith('/assets/')) {
+        return response;
       }
-      return response;
+      const responseCopy = response.clone();
+      return caches.open(CACHE_NAME)
+        .then((cache) => cache.put(request, responseCopy))
+        .then(() => response)
+        .catch(() => response);
     }).catch(async () => {
       const offlinePage = await caches.match(OFFLINE_URL);
       return offlinePage || Response.error();
