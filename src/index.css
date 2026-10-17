@@ -380,3 +380,10 @@ footer {
 .username-status.taken { color: #ffaaa9; }
 :where(button, a, input, textarea, select, [tabindex]):focus-visible { outline: 2px solid #c1a7ff; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
+
+
+.faq-list { display: grid; gap: 10px; margin: 16px 0 28px; }
+.faq-item { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 15px 17px; }
+.faq-item summary { cursor: pointer; font-weight: 700; color: #eee7ff; }
+.faq-item summary:focus-visible { outline: 2px solid #c1a7ff; outline-offset: 4px; border-radius: 3px; }
+.faq-item p { margin: 12px 0 0; font-size: 14px; }
