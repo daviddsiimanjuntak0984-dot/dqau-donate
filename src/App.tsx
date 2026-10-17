@@ -10,7 +10,12 @@ interface CreatorProfile {
   display_name: string;
   bio: string;
   avatar_url: string | null;
+  cover_url: string | null;
+  album_urls: string[];
+  social_links: Record<string, string>;
+  is_public: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 interface PlatformCard {
@@ -121,8 +126,14 @@ export function App() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUrl, setCoverUrl] = useState('');
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [albumUrls, setAlbumUrls] = useState<string[]>([]);
+  const [albumUploading, setAlbumUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
+  const [selectedProfileTab, setSelectedProfileTab] = useState<'profil' | 'galeri' | 'dukung'>('profil');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -133,7 +144,7 @@ export function App() {
     }
     const loadProfiles = async () => {
       setProfileLoading(true);
-      const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
       if (!error && data) setProfiles(data as CreatorProfile[]);
       setProfileLoading(false);
     };
@@ -158,16 +169,30 @@ export function App() {
       setBio('');
       setAvatarUrl('');
       setAvatarPreview(null);
+      setCoverUrl('');
+      setCoverPreview(null);
+      setAlbumUrls([]);
       return;
     }
     const loadMyProfile = async () => {
-      const { data } = await supabase.from('profiles').select('username, display_name, bio, avatar_url').eq('id', user.id).maybeSingle();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username, display_name, bio, avatar_url, cover_url, album_urls')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (error) {
+        setProfileMessage('Gagal memuat profil: ' + error.message);
+        return;
+      }
       if (data) {
         setProfileName(data.display_name || '');
         setUsername(data.username || '');
         setBio(data.bio || '');
         setAvatarUrl(data.avatar_url || '');
         setAvatarPreview(data.avatar_url || null);
+        setCoverUrl(data.cover_url || '');
+        setCoverPreview(data.cover_url || null);
+        setAlbumUrls(Array.isArray(data.album_urls) ? data.album_urls.filter((url: unknown): url is string => typeof url === 'string') : []);
       }
     };
     void loadMyProfile();
@@ -331,30 +356,116 @@ export function App() {
     return !q || [profile.username, profile.display_name, profile.bio].some(v => (v || '').toLowerCase().includes(q));
   });
 
-  const uploadAvatar = async (file: File) => {
-    if (!user) { setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah avatar.'); return null; }
-    if (!file.type.startsWith('image/')) { setProfileMessage('Hanya file gambar yang diizinkan.'); return null; }
-    if (file.size > 2 * 1024 * 1024) { setProfileMessage('Ukuran maksimal avatar 2MB.'); return null; }
-    setAvatarUploading(true);
-    setProfileMessage('Mengunggah avatar...');
+  const uploadCreatorMedia = async (file: File, folder: 'avatar' | 'cover' | 'album'): Promise<string | null> => {
+    if (!user) {
+      setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah gambar.');
+      return null;
+    }
+    const allowedTypes: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'image/avif': 'avif',
+    };
+    if (!allowedTypes[file.type]) {
+      setProfileMessage('Format gambar yang didukung: JPG, PNG, WebP, GIF, atau AVIF.');
+      return null;
+    }
+    const maxBytes = folder === 'avatar' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setProfileMessage(folder === 'avatar' ? 'Ukuran avatar maksimal 2MB.' : 'Ukuran sampul/album maksimal 5MB per gambar.');
+      return null;
+    }
+
+    const bucket = 'creator-media';
+    const filePath = `${user.id}/${folder}/${crypto.randomUUID()}.${allowedTypes[file.type]}`;
     try {
-      const filePath = `${user.id}/${Date.now()}_${file.name}`;
-      const bucket = 'avatars';
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, {
+        upsert: false,
+        contentType: file.type,
+        cacheControl: '3600',
+      });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
-      const publicUrl = urlData?.publicUrl || '';
-      setAvatarUrl(publicUrl);
-      setAvatarPreview(publicUrl);
-      setProfileMessage('Avatar berhasil diunggah. Ingat untuk menyimpan profil.');
-      return publicUrl;
+      return urlData.publicUrl || null;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengunggah avatar.';
+      const msg = err instanceof Error ? err.message : 'Gagal mengunggah gambar.';
       setProfileMessage(msg);
       return null;
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    setAvatarUploading(true);
+    setProfileMessage('Mengunggah foto profil…');
+    try {
+      const publicUrl = await uploadCreatorMedia(file, 'avatar');
+      if (!publicUrl) return null;
+      setAvatarUrl(publicUrl);
+      setAvatarPreview(publicUrl);
+      setProfileMessage('Foto profil berhasil diunggah. Simpan perubahan profil.');
+      return publicUrl;
     } finally {
       setAvatarUploading(false);
     }
+  };
+
+  const handleCoverFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const localPreview = URL.createObjectURL(file);
+    setCoverPreview(localPreview);
+    setCoverUploading(true);
+    void (async () => {
+      try {
+        const publicUrl = await uploadCreatorMedia(file, 'cover');
+        if (publicUrl) {
+          setCoverUrl(publicUrl);
+          setCoverPreview(publicUrl);
+          setProfileMessage('Foto sampul berhasil diunggah. Simpan perubahan profil.');
+        } else {
+          setCoverPreview(coverUrl || null);
+        }
+      } finally {
+        URL.revokeObjectURL(localPreview);
+        setCoverUploading(false);
+      }
+    })();
+  };
+
+  const handleAlbumFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const selectedFiles = Array.from(input.files || []);
+    if (!selectedFiles.length) return;
+    const remainingSlots = Math.max(0, 9 - albumUrls.length);
+    if (remainingSlots === 0) {
+      setProfileMessage('Album sudah mencapai batas 9 foto. Hapus beberapa foto terlebih dahulu.');
+      input.value = '';
+      return;
+    }
+    if (selectedFiles.length > remainingSlots) {
+      setProfileMessage(`Album hanya menerima 9 foto. Maksimal ${remainingSlots} foto lagi yang akan diunggah.`);
+    }
+    setAlbumUploading(true);
+    void (async () => {
+      const uploaded: string[] = [];
+      for (const file of selectedFiles.slice(0, remainingSlots)) {
+        const url = await uploadCreatorMedia(file, 'album');
+        if (url) uploaded.push(url);
+      }
+      if (uploaded.length) {
+        setAlbumUrls((current) => [...current, ...uploaded].slice(0, 9));
+        setProfileMessage(`${uploaded.length} foto album berhasil diunggah. Simpan perubahan profil.`);
+      }
+      setAlbumUploading(false);
+      input.value = '';
+    })();
+  };
+
+  const removeAlbumPhoto = (url: string) => {
+    setAlbumUrls((current) => current.filter((item) => item !== url));
+    setProfileMessage('Foto dihapus dari daftar album. Simpan profil untuk menyimpan perubahan.');
   };
 
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -370,9 +481,17 @@ export function App() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (!profileName.trim() || profileName.trim().length > 40) {
+      setProfileMessage('Nama tampilan wajib diisi dan maksimal 40 karakter.');
+      return;
+    }
+    if (bio.trim().length > 300) {
+      setProfileMessage('Bio maksimal 300 karakter.');
+      return;
+    }
     const cleanUsername = username.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) {
-      setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.');
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      setProfileMessage('Username harus 3–20 karakter: huruf kecil, angka, atau garis bawah.');
       return;
     }
     setSavingProfile(true);
@@ -382,13 +501,16 @@ export function App() {
       username: cleanUsername,
       display_name: profileName.trim(),
       bio: bio.trim(),
-      avatar_url: avatarUrl.trim() || null,
+      avatar_url: avatarUrl.trim(),
+      cover_url: coverUrl.trim(),
+      album_urls: albumUrls,
+      updated_at: new Date().toISOString(),
     });
     if (error) {
       setProfileMessage((error as any).code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + (error as any).message);
     } else {
       setProfileMessage('Profil berhasil disimpan.');
-      const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+      const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
       if (data) setProfiles(data as CreatorProfile[]);
     }
     setSavingProfile(false);
@@ -487,7 +609,8 @@ export function App() {
                 id="creatorDisplayName"
                 value={profileName}
                 onChange={e => setProfileName(e.target.value)}
-                maxLength={60}
+                maxLength={40}
+                required
                 placeholder="Nama yang terlihat di profil"
               />
 
@@ -498,7 +621,7 @@ export function App() {
                 onChange={e => setUsername(e.target.value)}
                 required
                 minLength={3}
-                maxLength={24}
+                maxLength={20}
                 placeholder="username_kamu"
               />
 
@@ -507,21 +630,40 @@ export function App() {
                 id="creatorBio"
                 value={bio}
                 onChange={e => setBio(e.target.value)}
-                maxLength={500}
+                maxLength={300}
                 rows={3}
                 placeholder="Ceritakan tentang karya kamu"
               />
 
-              <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
-                {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
-                <div style={{ flex: 1 }}>
-                  <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
-                  <div style={{ marginTop: 6 }}>
-                    <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
-                  </div>
+              <label htmlFor="creatorAvatar">Foto profil</label>
+              <div className="media-editor-row">
+                {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="Pratinjau foto profil" /> : <div className="avatar">👤</div>}
+                <div className="media-editor-control">
+                  <input id="creatorAvatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleAvatarFileChange} disabled={avatarUploading} />
+                  <small>{avatarUploading ? 'Mengunggah foto profil…' : 'JPG/PNG/WebP/GIF/AVIF · maksimal 2MB'}</small>
                 </div>
               </div>
+
+              <label htmlFor="creatorCover">Foto sampul profil</label>
+              <div className="cover-editor-preview">
+                {coverPreview ? <img src={coverPreview} alt="Pratinjau sampul profil" /> : <span>✦ Sampul profil kreator</span>}
+              </div>
+              <input id="creatorCover" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleCoverFileChange} disabled={coverUploading} />
+              <small className="media-editor-help">{coverUploading ? 'Mengunggah foto sampul…' : 'Foto lebar ditampilkan di bagian atas profil · maksimal 5MB'}</small>
+
+              <label htmlFor="creatorAlbum">Album foto kreator</label>
+              <input id="creatorAlbum" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleAlbumFilesChange} disabled={albumUploading || albumUrls.length >= 9} />
+              <small className="media-editor-help">{albumUploading ? 'Mengunggah foto album…' : `${albumUrls.length}/9 foto · JPG/PNG/WebP/GIF/AVIF · maksimal 5MB per foto`}</small>
+              {albumUrls.length > 0 && (
+                <div className="album-editor-grid">
+                  {albumUrls.map((url, index) => (
+                    <div className="album-editor-item" key={url}>
+                      <img src={url} alt={`Foto album ${index + 1}`} />
+                      <button className="album-remove-button" type="button" onClick={() => removeAlbumPhoto(url)} aria-label={`Hapus foto album ${index + 1}`}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <button className="btn btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
               {profileMessage && <p className="message" role="status">{profileMessage}</p>}
@@ -533,11 +675,19 @@ export function App() {
         <section className="cards" id="cards">
           {profileLoading ? <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
-              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || '').charAt(0).toUpperCase()}</div>}
-              <h3>{profile.display_name || profile.username}</h3>
-              <span className="tag">@{profile.username}</span>
-              <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
-              <button className="btn btn-ghost" type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
+              <div className="creator-card-cover">
+                {profile.cover_url ? <img src={profile.cover_url} alt="" loading="lazy" /> : <div className="creator-card-cover-placeholder"><span>✦</span></div>}
+              </div>
+              <div className="creator-card-content">
+                {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} loading="lazy" /> : <div className="avatar creator-card-avatar">{(profile.display_name || profile.username || '').charAt(0).toUpperCase()}</div>}
+                <h3>{profile.display_name || profile.username}</h3>
+                <span className="tag">@{profile.username}</span>
+                <p>{profile.bio || 'Kreator ini belum menambahkan bio.'}</p>
+                <div className="creator-card-actions">
+                  <span className="creator-card-media-count">{profile.album_urls?.length || 0} foto album</span>
+                  <button className="btn btn-ghost" type="button" onClick={() => { setSelectedProfileTab('profil'); setSelectedProfile(profile); }}>Lihat profil</button>
+                </div>
+              </div>
             </article>
           ))}
           {!profileLoading && filteredProfiles.length === 0 && <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>
@@ -780,25 +930,66 @@ export function App() {
 
       {selectedProfile && (
         <div
-          className="modal"
+          className="modal profile-view-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="creatorDialogTitle"
           onClick={() => setSelectedProfile(null)}
         >
-          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            {selectedProfile.avatar_url ? (
-              <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} />
-            ) : (
-              <div className="avatar">{(selectedProfile.display_name || selectedProfile.username || '').charAt(0).toUpperCase()}</div>
-            )}
-            <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
-            <span className="tag">@{selectedProfile.username}</span>
-            <p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p>
-            <DonationForm creatorId={selectedProfile.id} creatorName={selectedProfile.display_name || selectedProfile.username} />
-            <button className="btn btn-primary" type="button" onClick={() => setSelectedProfile(null)}>
-              Mengerti
-            </button>
+          <div className="profile-view-dialog" onClick={(e) => e.stopPropagation()}>
+            <button className="close profile-view-close" type="button" aria-label="Tutup profil" onClick={() => setSelectedProfile(null)}>×</button>
+            <div className="profile-view-cover">
+              {selectedProfile.cover_url ? <img src={selectedProfile.cover_url} alt={`Sampul ${selectedProfile.display_name || selectedProfile.username}`} /> : <div className="profile-view-cover-placeholder"><span>✦</span><span>DQUA CREATOR</span></div>}
+              <div className="profile-view-cover-shade" />
+            </div>
+            <div className="profile-view-identity">
+              {selectedProfile.avatar_url
+                ? <img className="profile-view-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.display_name || selectedProfile.username} />
+                : <div className="profile-view-avatar profile-view-avatar-fallback">{(selectedProfile.display_name || selectedProfile.username || '').charAt(0).toUpperCase()}</div>}
+              <div className="profile-view-name">
+                <h2 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h2>
+                <span>@{selectedProfile.username}</span>
+                <small>{selectedProfile.album_urls?.length || 0} foto di album kreator</small>
+              </div>
+              <button className="btn btn-primary profile-support-shortcut" type="button" onClick={() => setSelectedProfileTab('dukung')}>♡ Dukung</button>
+            </div>
+            <div className="profile-view-tabs" role="tablist" aria-label="Bagian profil kreator">
+              <button type="button" role="tab" aria-selected={selectedProfileTab === 'profil'} className={selectedProfileTab === 'profil' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('profil')}>Profil</button>
+              <button type="button" role="tab" aria-selected={selectedProfileTab === 'galeri'} className={selectedProfileTab === 'galeri' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('galeri')}>Foto & Album</button>
+              <button type="button" role="tab" aria-selected={selectedProfileTab === 'dukung'} className={selectedProfileTab === 'dukung' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('dukung')}>Dukung</button>
+            </div>
+            <div className="profile-view-body">
+              {selectedProfileTab === 'profil' && (
+                <section className="profile-about-panel" role="tabpanel">
+                  <h3>Tentang kreator</h3>
+                  <p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p>
+                  <div className="profile-about-meta"><span>✦</span><div><strong>@{selectedProfile.username}</strong><small>Profil kreator Dqua Donate</small></div></div>
+                  {selectedProfile.album_urls?.length > 0 && (
+                    <div className="profile-gallery-preview">
+                      <div className="profile-gallery-preview-heading"><h3>Foto terbaru</h3><button type="button" onClick={() => setSelectedProfileTab('galeri')}>Lihat semua</button></div>
+                      <div className="profile-gallery-grid compact">
+                        {selectedProfile.album_urls.slice(0, 3).map((url, index) => <img src={url} key={url} alt={`Foto kreator ${index + 1}`} loading="lazy" />)}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+              {selectedProfileTab === 'galeri' && (
+                <section className="profile-gallery-panel" role="tabpanel">
+                  <h3>Album foto</h3>
+                  {selectedProfile.album_urls?.length ? (
+                    <div className="profile-gallery-grid">
+                      {selectedProfile.album_urls.map((url, index) => <a href={url} target="_blank" rel="noopener noreferrer" key={url} aria-label={`Buka foto album ${index + 1} ukuran penuh`}><img src={url} alt={`Foto album ${index + 1}`} loading="lazy" /></a>)}
+                    </div>
+                  ) : <p className="profile-empty-gallery">Kreator belum menambahkan foto album.</p>}
+                </section>
+              )}
+              {selectedProfileTab === 'dukung' && (
+                <section className="profile-support-panel" role="tabpanel">
+                  <DonationForm creatorId={selectedProfile.id} creatorName={selectedProfile.display_name || selectedProfile.username} />
+                </section>
+              )}
+            </div>
           </div>
         </div>
       )}
