@@ -615,7 +615,7 @@ export function App() {
   useEffect(() => {
     const syncCreatorFromLocation = () => {
       const queryUsername = new URLSearchParams(window.location.search).get('creator');
-      const pathMatch = window.location.pathname.match(/^\\/u\\/([a-z0-9_]{3,20})\\/?$/i);
+      const pathMatch = window.location.pathname.match(/^\/u\/([a-z0-9_]{3,20})\/?$/i);
       const pathUsername = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]).toLowerCase() : null;
       const usernameFromUrl = (queryUsername || pathUsername || '').trim().toLowerCase();
       if (!usernameFromUrl) {
