@@ -418,3 +418,7 @@ body.dqua-overlay-mode { margin: 0 !important; }
   .creator-profile-card, .profile-view-dialog, .profile-about-panel, .profile-gallery-panel, .profile-support-panel { animation: none !important; }
   .creator-card-cover img, .profile-gallery-grid img { transition: none !important; }
 }
+
+
+/* Clear status when the frontend is newer than its connected database. */
+.schema-compatibility-note { margin: 12px 0 18px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(251,191,36,.22); background: rgba(251,191,36,.06); color: #f5d98b; font-size: 13px; }
