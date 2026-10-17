@@ -1,34 +1,29 @@
 # Dqua Donate payment and overlay setup
 
-This branch adds an additive payment foundation using Midtrans Snap and a private Supabase Realtime Broadcast channel. The migration creates a new donation_transactions table so it does not overwrite the legacy public.donations table found in staging.
+## Current state: payment processing disabled
 
-## Supabase
+Payment creation and webhook reconciliation are **disabled by default**. The Edge Functions return `503 DONATION_PROCESSING_DISABLED` unless the server-side flag `DQUA_DONATIONS_ENABLED=true` is explicitly set. Do not set this flag or configure production payment credentials until the owner explicitly approves payment processing.
 
-1. Apply supabase/migrations/20261017000000_dqua_donate_payment_overlay.sql to the staging project first.
-2. Deploy the three Edge Functions from this repository.
-3. Set the secret MIDTRANS_SERVER_KEY in Supabase Edge Function secrets.
-4. Set MIDTRANS_IS_PRODUCTION=false while using Midtrans Sandbox. Change it to true only after merchant approval and successful production verification.
+This code path is separate from the OBS visual demo at `/?overlay=1&preview=1&demo=1`, which is a local preview and never creates a transaction. No QRIS/e-wallet payments, production gateway checkout, payout, or withdrawal is enabled by default.
 
-Supabase normally provides SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY to Edge Functions. Never copy a service-role key into frontend variables or Git.
+## Future activation (reference only; not approved)
 
-The public donation function and provider webhook do not require a Supabase user JWT. The webhook verifies Midtrans's SHA-512 signature and calls Midtrans's status API before updating a transaction. It never trusts a browser redirect as proof of payment.
+When the owner explicitly authorizes payment testing, use only the staging project first. This migration adds `donation_transactions` without overwriting the legacy `public.donations` table.
 
-## Deployment
+Before any activation:
+1. Obtain explicit owner approval for the intended sandbox scope.
+2. Add `DQUA_DONATIONS_ENABLED=true` as a server-side Supabase Edge Function secret only for the approved staging environment.
+3. Configure `MIDTRANS_SERVER_KEY` using the **Sandbox** credential. Keep `MIDTRANS_IS_PRODUCTION=false`.
+4. Deploy and test the Edge Functions and webhook signature/status reconciliation end-to-end in staging.
+5. Do not enable production mode, QRIS/e-wallet live checkout, payouts, or withdrawals without a separate explicit approval and security review.
 
-~~~sh
-supabase functions deploy create-donation --project-ref wztmgafrtxecvxzibzaq --no-verify-jwt
-supabase functions deploy payment-webhook --project-ref wztmgafrtxecvxzibzaq --no-verify-jwt
-supabase functions deploy create-overlay-token --project-ref wztmgafrtxecvxzibzaq
-supabase secrets set MIDTRANS_SERVER_KEY=YOUR_SANDBOX_SERVER_KEY MIDTRANS_IS_PRODUCTION=false --project-ref wztmgafrtxecvxzibzaq
-~~~
+Supabase normally provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to Edge Functions. The service-role credential must remain server-side and must never be copied into frontend variables, logged, committed, or shared in chat.
 
-Use your real secret directly in a terminal session; never put it in this repository, a browser variable, or chat. These commands target staging (wztmgafrtxecvxzibzaq), not production (aaqfamoedywfjidwupou).
+## Function behavior
 
-## Before production
+- `create-donation` denies checkout by default unless the explicit server-side flag is enabled. It validates creator, amount, input text, idempotency, and provider configuration before attempting to create a provider checkout.
+- `payment-webhook` is also disabled by default. If deliberately activated in a future approved test, it verifies the provider signature and reconciles status through the provider's status API before changing a transaction.
+- The browser must not treat a redirect or client-side message as proof of payment.
+- `create-overlay-token` is separate from payment activation and provides creator-scoped private Realtime credentials.
 
-- Add rate limiting and abuse protection for the public create-donation endpoint.
-- Configure and verify the Midtrans merchant notification URL in Sandbox and run sandbox transactions.
-- Test webhook retries, duplicate notifications, late notifications, refunds, RLS and Realtime authorization.
-- Verify Cloudflare Pages uses only VITE_SUPABASE_URL and the publishable/anon key.
-- Keep production secrets separate and deploy only after staging passes.
-- A hosted donation feature is not production-ready until the provider account, notifications, refunds and end-to-end flow have been tested.
+Do not paste secrets into repository files or ChatGPT. Deployment commands are intentionally omitted here so this documentation cannot accidentally enable payment processing without the owner approving the exact scope.
