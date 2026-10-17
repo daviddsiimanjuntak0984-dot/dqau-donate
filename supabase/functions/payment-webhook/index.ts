@@ -42,6 +42,12 @@ function mapStatus(value: string, fraudStatus?: string): "pending" | "paid" | "f
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  // Refuse payment-state reconciliation until the owner explicitly enables
+  // the donation workflow. The missing/default flag fails closed.
+  if (Deno.env.get("DQUA_DONATIONS_ENABLED") !== "true") {
+    return json({ error: "Donation processing is disabled.", code: "DONATION_PROCESSING_DISABLED" }, 503);
+  }
+
   const serverKey = Deno.env.get("MIDTRANS_SERVER_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
