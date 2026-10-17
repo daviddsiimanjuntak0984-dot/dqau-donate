@@ -20,6 +20,7 @@ export function OverlayView() {
   const query = new URLSearchParams(window.location.search);
   const token = query.get("token") || "";
   const preview = query.get("preview") === "1";
+  const demo = query.get("demo") === "1";
   const [alert, setAlert] = useState<AlertPayload | null>(null);
   const [visible, setVisible] = useState(false);
   const [alertVersion, setAlertVersion] = useState(0);
@@ -70,6 +71,21 @@ export function OverlayView() {
       if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
     };
   }, [preview, showAlert]);
+
+  useEffect(() => {
+    if (!preview || !demo) return;
+
+    // Explicit preview-only route for visual testing without login or payments.
+    const timer = window.setTimeout(() => {
+      showAlert({
+        donor_name: "Pendukung Demo",
+        amount: 20000,
+        message: "Ini hanya preview animasi — bukan transaksi nyata.",
+      }, true);
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [preview, demo, showAlert]);
 
   useEffect(() => {
     if (preview || !token) return;
