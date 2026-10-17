@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from './supabase';
+import { isSupabaseConfigured, supabase } from './supabase';
 import { useDebounce } from './hooks/useDebounce';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import type { User } from '@supabase/supabase-js';
@@ -224,6 +224,10 @@ export function App() {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Supabase belum dikonfigurasi. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di pengaturan hosting.', isError: true });
+      return;
+    }
     setLoading(true);
     setAuthMessage({
       text: authMode === 'signup' ? 'Membuat akun...' : 'Memeriksa akun...',
@@ -275,6 +279,10 @@ export function App() {
   };
 
   const handleOAuth = async (provider: 'google' | 'facebook') => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Supabase belum dikonfigurasi. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di pengaturan hosting.', isError: true });
+      return;
+    }
     setLoading(true);
     setAuthMessage({ text: 'Menghubungkan ke ' + provider + '...', isError: false });
     try {
@@ -294,6 +302,10 @@ export function App() {
   };
 
   const handleSendPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Supabase belum dikonfigurasi. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di pengaturan hosting.', isError: true });
+      return;
+    }
     const trimmed = phoneNumber.trim();
     if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
       setAuthMessage({
@@ -320,6 +332,10 @@ export function App() {
   };
 
   const handleVerifyPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Supabase belum dikonfigurasi. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di pengaturan hosting.', isError: true });
+      return;
+    }
     const phone = phoneNumber.trim();
     const token = phoneCode.trim();
     if (!phone || !token) {
