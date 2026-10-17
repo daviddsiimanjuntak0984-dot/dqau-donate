@@ -4,16 +4,6 @@ import type { User } from '@supabase/supabase-js';
 
 interface CreatorProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; }
 
-interface CreatorCard {
-  id: string;
-  avatar: string;
-  name: string;
-  tag: string;
-  desc: string;
-  searchTerms: string;
-  buttonLabel: string;
-  type: 'profile' | 'support';
-}
 
 interface PlatformCard {
   id: string;
