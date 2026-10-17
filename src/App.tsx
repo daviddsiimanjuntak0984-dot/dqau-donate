@@ -130,7 +130,7 @@ export function App() {
   const debouncedUsername = useDebounce(username.trim().toLowerCase(), 350);
 
   useFocusTrap(modalOpen, authDialogRef, () => { setModalOpen(false); setAuthMessage({ text: '', isError: false }); });
-  useFocusTrap(Boolean(selectedProfile), creatorDialogRef, () => closeCreatorProfile());
+  useFocusTrap(Boolean(selectedProfile) && !donateOpen && !alertInfo, creatorDialogRef, () => closeCreatorProfile());
   useFocusTrap(Boolean(alertInfo), alertDialogRef, () => setAlertInfo(null));
   useFocusTrap(donateOpen, donateDialogRef, () => setDonateOpen(false));
 
@@ -280,7 +280,7 @@ export function App() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: provider as 'google' | 'facebook',
-        options: { redirectTo: window.location.origin },
+        options: { redirectTo: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim() || window.location.origin },
       });
       if (error) throw error;
     } catch (err: unknown) {
