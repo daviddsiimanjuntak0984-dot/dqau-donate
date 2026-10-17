@@ -222,3 +222,107 @@ body.dqua-overlay-mode { margin: 0 !important; }
 .overlay-root { position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent !important; pointer-events: none; }
 .overlay-alert { pointer-events: none; }
 
+
+
+/* Cheerful OBS celebration: all decorations are local CSS/emoji, no remote GIF dependency. */
+.overlay-alert { position: absolute; isolation: isolate; }
+.overlay-alert.is-visible {
+  animation:
+    dqua-alert-pop 680ms cubic-bezier(.18,.92,.28,1.25) both,
+    dqua-neon-pulse 2.6s ease-in-out 680ms infinite;
+}
+.oa-left, .oa-body { position: relative; z-index: 2; }
+.oa-left {
+  position: relative;
+  overflow: visible;
+  background: radial-gradient(circle at 32% 22%, rgba(255,220,120,.3), rgba(167,139,250,.19) 58%, rgba(167,139,250,.1));
+  box-shadow: inset 0 0 18px rgba(250,204,21,.08), 0 0 20px rgba(167,139,250,.12);
+}
+.oa-mascot { display: inline-block; font-size: 30px; line-height: 1; filter: drop-shadow(0 3px 9px rgba(251,191,36,.28)); }
+.oa-mascot.is-celebrating { animation: dqua-mascot-bounce 780ms ease-in-out infinite; transform-origin: 50% 80%; }
+.oa-mini-heart { position: absolute; right: -8px; top: -7px; font-size: 15px; animation: dqua-heart-float 1.7s ease-in-out infinite; }
+.oa-floating-badge {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: -15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  max-width: calc(100% - 20px);
+  padding: 7px 15px;
+  border: 2px solid rgba(255,255,255,.88);
+  border-radius: 999px;
+  background: linear-gradient(110deg, #fbbf24, #fde68a 52%, #fb7185);
+  color: #28183e;
+  box-shadow: 0 8px 24px rgba(251,191,36,.32), 0 0 0 4px rgba(251,191,36,.08);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: dqua-badge-pop 480ms cubic-bezier(.2,1.3,.35,1) both;
+}
+.oa-badge-sparkle { color: #fff; text-shadow: 0 1px 4px rgba(124,58,237,.5); animation: dqua-sparkle-spin 2.4s linear infinite; }
+.oa-badge-heart { display: inline-block; animation: dqua-heart-beat 1.1s ease-in-out infinite; }
+.oa-confetti-layer { position: absolute; z-index: 1; inset: -12px -15px; pointer-events: none; overflow: visible; }
+.oa-confetti-bit {
+  position: absolute;
+  top: 18%;
+  display: inline-block;
+  font-size: 19px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 6px rgba(251,191,36,.28));
+  animation: dqua-confetti-dance 1.55s cubic-bezier(.2,.7,.25,1) both;
+}
+.oa-confetti-one { left: -12px; animation-delay: 0ms; }
+.oa-confetti-two { left: 17%; top: -8px; animation-delay: 70ms; font-size: 16px; }
+.oa-confetti-three { right: 23%; top: -12px; animation-delay: 120ms; }
+.oa-confetti-four { right: -10px; top: 30%; animation-delay: 35ms; font-size: 22px; }
+.oa-confetti-five { right: 15%; bottom: -9px; top: auto; animation-delay: 150ms; font-size: 16px; }
+.oa-confetti-six { left: 43%; bottom: -11px; top: auto; animation-delay: 210ms; font-size: 15px; }
+@keyframes dqua-alert-pop {
+  0% { opacity: 0; transform: translate3d(0,-30px,0) scale(.82) rotate(-2deg); }
+  58% { opacity: 1; transform: translate3d(0,5px,0) scale(1.035) rotate(.6deg); }
+  76% { transform: translate3d(0,-3px,0) scale(.99) rotate(-.2deg); }
+  100% { opacity: 1; transform: translate3d(0,0,0) scale(1) rotate(0); }
+}
+@keyframes dqua-neon-pulse {
+  0%, 100% { box-shadow: 0 22px 60px rgba(0,0,0,.35), 0 0 14px rgba(167,139,250,.18); border-color: rgba(196,181,253,.42); }
+  50% { box-shadow: 0 22px 60px rgba(0,0,0,.35), 0 0 30px rgba(251,191,36,.28), 0 0 48px rgba(167,139,250,.16); border-color: rgba(251,191,36,.82); }
+}
+@keyframes dqua-mascot-bounce {
+  0%, 100% { transform: translateY(0) rotate(0) scale(1); }
+  22% { transform: translateY(-8px) rotate(-9deg) scale(1.08); }
+  45% { transform: translateY(1px) rotate(5deg) scale(.96,1.04); }
+  70% { transform: translateY(-3px) rotate(-3deg) scale(1.02); }
+}
+@keyframes dqua-heart-float { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-6px) scale(1.14); } }
+@keyframes dqua-heart-beat { 0%,100% { transform: scale(1) rotate(0); } 18% { transform: scale(1.22) rotate(-8deg); } 34% { transform: scale(1) rotate(6deg); } 50% { transform: scale(1.14) rotate(0); } }
+@keyframes dqua-badge-pop {
+  0% { opacity: 0; transform: translate(-50%,12px) scale(.72) rotate(-3deg); }
+  74% { opacity: 1; transform: translate(-50%,-2px) scale(1.06) rotate(1deg); }
+  100% { opacity: 1; transform: translate(-50%,0) scale(1) rotate(0); }
+}
+@keyframes dqua-sparkle-spin { 0%,100% { transform: rotate(0) scale(1); } 50% { transform: rotate(25deg) scale(1.2); } }
+@keyframes dqua-confetti-dance {
+  0% { opacity: 0; transform: translate3d(0,7px,0) rotate(-35deg) scale(.35); }
+  24% { opacity: 1; transform: translate3d(0,-9px,0) rotate(40deg) scale(1.12); }
+  58% { opacity: .98; transform: translate3d(0,3px,0) rotate(100deg) scale(.9); }
+  100% { opacity: .22; transform: translate3d(0,-8px,0) rotate(180deg) scale(.68); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-alert.is-visible, .oa-floating-badge, .oa-confetti-bit,
+  .oa-mascot.is-celebrating, .oa-mini-heart, .oa-badge-sparkle, .oa-badge-heart {
+    animation: none !important;
+  }
+  .overlay-alert { transition: opacity .01ms !important; }
+  .oa-confetti-layer { display: none !important; }
+}
+@media (max-width: 480px) {
+  .oa-floating-badge { top: -12px; gap: 4px; padding: 6px 10px; font-size: 9px; }
+  .oa-mascot { font-size: 25px; }
+  .oa-confetti-bit { font-size: 16px; }
+}

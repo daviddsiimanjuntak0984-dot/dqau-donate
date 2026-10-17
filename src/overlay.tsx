@@ -22,6 +22,7 @@ export function OverlayView() {
   const preview = query.get("preview") === "1";
   const [alert, setAlert] = useState<AlertPayload | null>(null);
   const [visible, setVisible] = useState(false);
+  const [alertVersion, setAlertVersion] = useState(0);
   const hideTimer = useRef<number | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -37,6 +38,7 @@ export function OverlayView() {
       isTest,
     };
     setAlert(safeAlert);
+    setAlertVersion((version) => version + 1);
     setVisible(true);
     if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => setVisible(false), 8000);
@@ -92,7 +94,25 @@ export function OverlayView() {
     <main className="overlay-root" aria-label="Dqua Donate alert overlay">
       <audio ref={audioRef} src="/alert-chime.mp3" preload="auto" />
       <section className={"overlay-alert " + (visible ? "is-visible" : "")} role="status" aria-live="polite">
-        <div className="oa-left" aria-hidden="true">✦</div>
+        {visible && (
+          <div className="oa-confetti-layer" key={alertVersion} aria-hidden="true">
+            <span className="oa-confetti-bit oa-confetti-one">✦</span>
+            <span className="oa-confetti-bit oa-confetti-two">💖</span>
+            <span className="oa-confetti-bit oa-confetti-three">✧</span>
+            <span className="oa-confetti-bit oa-confetti-four">⭐</span>
+            <span className="oa-confetti-bit oa-confetti-five">💕</span>
+            <span className="oa-confetti-bit oa-confetti-six">✦</span>
+          </div>
+        )}
+        <div className="oa-floating-badge" aria-hidden="true">
+          <span className="oa-badge-sparkle">✦</span>
+          <span>DONASI BARU MASUK!</span>
+          <span className="oa-badge-heart">💖</span>
+        </div>
+        <div className="oa-left" aria-hidden="true">
+          <span className={"oa-mascot " + (visible ? "is-celebrating" : "")}>🎉</span>
+          <span className="oa-mini-heart">💗</span>
+        </div>
         <div className="oa-body">
           {alert?.isTest && <div className="oa-test-label">PREVIEW / TEST — bukan transaksi nyata</div>}
           <div className="oa-line oa-name">{alert?.donor_name || ""}</div>
