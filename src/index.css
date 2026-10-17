@@ -387,3 +387,56 @@ footer {
 .faq-item summary { cursor: pointer; font-weight: 700; color: #eee7ff; }
 .faq-item summary:focus-visible { outline: 2px solid #c1a7ff; outline-offset: 4px; border-radius: 3px; }
 .faq-item p { margin: 12px 0 0; font-size: 14px; }
+
+
+/* Facebook-inspired creator profile and entrance motion */
+.entrance-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: radial-gradient(ellipse at 50% 35%, #30204e 0%, #0d0b17 68%); animation: entrance-out 1.12s ease-in-out forwards; pointer-events: none; }
+.entrance-mark { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 22px; color: #fff; font-size: 36px; background: linear-gradient(135deg, #a987ff, #6041a8); box-shadow: 0 14px 50px rgba(155,114,255,.28); animation: entrance-mark-in .65s cubic-bezier(.2,.8,.2,1) both; }
+.entrance-overlay strong { font-size: 25px; letter-spacing: -.03em; animation: entrance-text-in .55s .12s ease both; }
+.entrance-overlay span { color: #c5badf; font-size: 13px; animation: entrance-text-in .55s .2s ease both; }
+@keyframes entrance-mark-in { from { opacity: 0; transform: translateY(14px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes entrance-text-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes entrance-out { 0%, 70% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }
+.entrance-content { animation: hero-enter .8s .1s both; }
+@keyframes hero-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+button { transition: background-color .15s ease, opacity .15s ease, transform .15s ease, box-shadow .15s ease; }
+button:active:not(:disabled) { transform: scale(.98); }
+.profile-dialog { width: min(100%, 760px); max-height: min(90vh, 820px); overflow-y: auto; padding: 0; text-align: left; border: 1px solid #493964; border-radius: 22px; background: var(--panel); box-shadow: 0 24px 80px rgba(0,0,0,.55); animation: fade-in-scale 180ms var(--ease) both; }
+.profile-cover { position: relative; height: 190px; overflow: hidden; background: radial-gradient(ellipse at 80% 10%, rgba(191,161,255,.55), transparent 34%), radial-gradient(ellipse at 20% 90%, rgba(103,73,163,.65), transparent 45%), linear-gradient(120deg,#211637,#49306e 54%,#151123); }
+.profile-cover::after { content: ''; position: absolute; inset: 0; opacity: .28; background-image: radial-gradient(circle at 25% 20%, #fff 0 1px, transparent 2px), radial-gradient(circle at 70% 50%, #fff 0 1px, transparent 2px); background-size: 44px 44px, 61px 61px; }
+.cover-caption { position: absolute; right: 22px; bottom: 18px; z-index: 1; color: #e7dcff; font-size: 10px; letter-spacing: .2em; font-weight: 800; }
+.profile-identity { display: flex; align-items: flex-end; gap: 18px; padding: 0 24px 20px; border-bottom: 1px solid var(--line); }
+.profile-large-avatar { flex: 0 0 116px; width: 116px; height: 116px; object-fit: cover; border-radius: 50%; border: 5px solid var(--panel); background: #39265c; margin-top: -54px; position: relative; z-index: 2; }
+.profile-initials { display: grid; place-items: center; color: #f7f1ff; font-size: 42px; font-weight: 800; background: linear-gradient(135deg,#7957bd,#35254e); }
+.profile-heading { flex: 1; min-width: 0; padding-bottom: 2px; }
+.profile-heading h2 { margin: 0 0 4px; font-size: clamp(21px,4vw,29px); line-height: 1.2; overflow-wrap: anywhere; }
+.profile-handle, .profile-joined { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+.profile-actions { display: flex; gap: 8px; align-items: center; padding-bottom: 3px; }
+.profile-actions button { white-space: nowrap; }
+.profile-tabs { display: flex; gap: 4px; padding: 0 22px; border-bottom: 1px solid var(--line); }
+.profile-tabs button { background: transparent; color: var(--muted); border-radius: 0; padding: 16px 14px 13px; border-bottom: 3px solid transparent; }
+.profile-tabs button:hover { background: rgba(155,114,255,.08); color: #fff; }
+.profile-tabs button.active { color: #cbb7ff; border-bottom-color: var(--purple); }
+.profile-tab-panel { min-height: 150px; padding: 22px 26px 8px; }
+.profile-tab-panel h3 { margin: 0 0 10px; color: #f4efff; }
+.profile-tab-panel p { overflow-wrap: anywhere; }
+.profile-meta { font-size: 12px; }
+.profile-close { display: block; margin: 4px 24px 22px auto; }
+.donate-warning { padding: 12px; border: 1px solid #705337; border-radius: 12px; color: #f4d8ae; background: rgba(112,83,55,.16); }
+@media (max-width: 600px) {
+  .profile-dialog { max-height: 92vh; border-radius: 18px; }
+  .profile-cover { height: 130px; }
+  .profile-identity { flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 0 16px 18px; }
+  .profile-large-avatar { width: 100px; height: 100px; flex-basis: 100px; margin-top: -48px; }
+  .profile-heading { width: 100%; }
+  .profile-actions { width: 100%; justify-content: center; }
+  .profile-actions button { flex: 1; }
+  .profile-tabs { justify-content: space-around; padding: 0 8px; }
+  .profile-tabs button { padding: 14px 8px 11px; flex: 1; }
+  .profile-tab-panel { padding: 18px 18px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entrance-overlay, .entrance-mark, .entrance-overlay strong, .entrance-overlay span, .entrance-content { animation: none !important; }
+  .entrance-overlay { display: none; }
+  .hero, .card, .dialog, .alert-dialog, .profile-dialog, button { animation: none !important; transition: none !important; }
+}
