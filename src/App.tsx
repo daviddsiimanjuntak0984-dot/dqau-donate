@@ -101,6 +101,7 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState<{ text: string; isError: boolean }>({ text: '', isError: false });
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPhoneAuth, setShowPhoneAuth] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -243,8 +244,9 @@ export function App() {
         });
         if (error) throw error;
         if (!data.session) {
+          setPendingConfirmationEmail(email.trim());
           setAuthMessage({
-            text: 'Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.',
+            text: 'Permintaan pendaftaran diterima. Buka email konfirmasi dari Dqau Donate untuk mengaktifkan akun. Jika belum ada, periksa Spam/Promosi atau kirim ulang email di bawah.',
             isError: false,
           });
         } else {
@@ -273,6 +275,34 @@ export function App() {
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
       setAuthMessage({ text: errorMessage, isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    const targetEmail = (pendingConfirmationEmail || email).trim();
+    if (!targetEmail) {
+      setAuthMessage({ text: 'Masukkan alamat email yang digunakan saat mendaftar.', isError: true });
+      return;
+    }
+    setLoading(true);
+    setAuthMessage({ text: 'Mengirim ulang email konfirmasi…', isError: false });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail,
+        options: { emailRedirectTo: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim() || window.location.origin },
+      });
+      if (error) throw error;
+      setPendingConfirmationEmail(targetEmail);
+      setAuthMessage({
+        text: 'Permintaan kirim ulang berhasil. Periksa Kotak Masuk, Spam, dan Promosi. Jika email masuk tetapi tidak ada tombol/link konfirmasi, template email Supabase perlu diperbaiki.',
+        isError: false,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal mengirim ulang email konfirmasi.';
+      setAuthMessage({ text: msg, isError: true });
     } finally {
       setLoading(false);
     }
@@ -692,6 +722,18 @@ export function App() {
                   {authMode === 'signup' ? 'Saya sudah punya akun' : 'Buat akun'}
                 </button>
               </div>
+              {authMode === 'signup' && pendingConfirmationEmail && (
+                <button
+                  type="button"
+                  className="secondary"
+                  id="resendConfirmation"
+                  disabled={loading}
+                  onClick={() => void handleResendConfirmation()}
+                  style={{ width: '100%', marginTop: 10 }}
+                >
+                  {loading ? 'Mengirim…' : 'Kirim ulang email verifikasi'}
+                </button>
+              )}
             </form>
 
             <div className="social-auth">
