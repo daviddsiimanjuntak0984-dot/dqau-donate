@@ -603,6 +603,7 @@ export function App() {
             <p>{search ? 'Coba kata kunci lain.' : 'Profil nyata akan muncul setelah kreator mendaftar dan menyimpan profilnya. Tidak ada kartu contoh.'}</p>
           </div>}
         </section>
+        </section>
 
         <section className="community-section"><div className="section-heading"><div><span className="section-kicker">TETAP TERHUBUNG</span><h2 className="section-title" id="komunitas">Komunitas & kanal.</h2><p>
           Kreator bisa membangun komunitas di platform favorit. Tautan undangan atau kanal khusus akan ditampilkan di profil kreator setelah profilnya diaktifkan.
