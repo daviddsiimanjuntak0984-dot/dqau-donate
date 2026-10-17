@@ -86,12 +86,10 @@ export function CreatorDashboard({
   profileId,
   profile,
   onOpenProfile,
-  onNeedLogin,
 }: {
   profileId: string;
   profile: SocialProfile | null;
   onOpenProfile: () => void;
-  onNeedLogin: () => void;
 }) {
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0, stories: 0 });
   const [loading, setLoading] = useState(true);
@@ -149,8 +147,15 @@ export function CreatorDashboard({
       </div>
       {notice && <p className="creator-social-notice" role="status">{notice}</p>}
       <div className="creator-dashboard-actions">
-        <button className="btn btn-primary" type="button" onClick={() => profile ? onOpenProfile() : onNeedLogin()} disabled={loading && !profile}>
-          {profile ? 'Buka profil publik' : 'Buat profil kreator'}
+        <button className="btn btn-primary" type="button" onClick={() => {
+          if (profile) onOpenProfile();
+          else {
+            const field = document.getElementById('creatorDisplayName');
+            field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            field?.focus({ preventScroll: true });
+          }
+        }} disabled={loading && !profile}>
+          {profile ? 'Buka profil publik' : 'Lengkapi profil di atas'}
         </button>
         <a className="creator-dashboard-link" href="#kreator">Temukan kreator ↗</a>
       </div>
@@ -161,11 +166,13 @@ export function CreatorDashboard({
 export function CreatorSocialProfile({
   profile,
   viewerId,
+  viewerHasProfile,
   onClose,
   onNeedLogin,
 }: {
   profile: SocialProfile;
   viewerId: string | null;
+  viewerHasProfile: boolean;
   onClose: () => void;
   onNeedLogin: () => void;
 }) {
@@ -307,6 +314,7 @@ export function CreatorSocialProfile({
 
   const toggleFollow = async () => {
     if (!viewerId) { onNeedLogin(); return; }
+    if (!viewerHasProfile) { setFeatureNotice('Simpan profil kreator kamu terlebih dahulu sebelum mengikuti akun lain.'); return; }
     if (ownProfile) return;
     setFeatureNotice('');
     if (following) {
@@ -327,6 +335,7 @@ export function CreatorSocialProfile({
 
   const toggleLike = async (post: SocialPost) => {
     if (!viewerId) { onNeedLogin(); return; }
+    if (!viewerHasProfile) { setFeatureNotice('Simpan profil kreator kamu terlebih dahulu sebelum menyukai postingan.'); return; }
     if (post.liked_by_me) {
       const { error } = await supabase.from('creator_post_likes').delete().eq('post_id', post.id).eq('user_id', viewerId);
       if (error) { setFeatureNotice('Belum berhasil membatalkan suka.'); return; }
@@ -366,6 +375,7 @@ export function CreatorSocialProfile({
 
   const submitComment = async (postId: string) => {
     if (!viewerId) { onNeedLogin(); return; }
+    if (!viewerHasProfile) { setFeatureNotice('Simpan profil kreator kamu terlebih dahulu sebelum berkomentar.'); return; }
     const content = (commentDrafts[postId] || '').trim();
     if (!content || content.length > 500) return;
     setCommentBusy(postId);
