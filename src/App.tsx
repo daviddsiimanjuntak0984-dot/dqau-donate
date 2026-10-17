@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, missingEnvVars } from './supabase';
 import type { User } from '@supabase/supabase-js';
 import { OverlaySettings, OverlayView } from './overlay';
 import { CreatorDashboard, CreatorSocialProfile } from './CreatorSocial';
@@ -144,7 +144,7 @@ export function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setProfileLoading(false);
-      setProfileMessage('Koneksi Supabase belum dikonfigurasi. Login dan data kreator belum tersedia sampai variabel deployment diatur.');
+      setProfileMessage('Data kreator belum dapat dimuat karena konfigurasi Supabase belum tersedia. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Nilai konfigurasi tidak ditampilkan.');
       return;
     }
     const loadProfiles = async () => {
@@ -272,7 +272,7 @@ export function App() {
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      setAuthMessage({ text: 'Login belum tersedia: konfigurasi Supabase pada Cloudflare Pages belum lengkap. Admin perlu mengatur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY, lalu deploy ulang.', isError: true });
+      setAuthMessage({ text: 'Login belum tersedia karena konfigurasi publik Supabase belum dapat dibaca. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Periksa log build yang hanya mencantumkan nama variabel, serta konfigurasi Pages Production/Preview. Nilai konfigurasi tidak ditampilkan.', isError: true });
       return;
     }
     setLoading(true);
