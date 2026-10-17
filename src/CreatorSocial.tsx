@@ -176,7 +176,7 @@ export function CreatorSocialProfile({
   onClose: () => void;
   onNeedLogin: () => void;
 }) {
-  const [tab, setTab] = useState<'profil' | 'posting' | 'reels' | 'foto' | 'tautan' | 'dukung'>('profil');
+  const [tab, setTab] = useState<'profil' | 'posting' | 'reels' | 'foto' | 'tautan' | 'dukung' | 'dasbor'>('profil');
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [following, setFollowing] = useState(false);
@@ -525,6 +525,7 @@ export function CreatorSocialProfile({
           </div>
           <div className="creator-social-primary-actions">
             {!ownProfile && <button className={'btn ' + (following ? 'btn-ghost' : 'btn-primary')} type="button" onClick={() => void toggleFollow()}>{following ? '✓ Mengikuti' : '+ Ikuti'}</button>}
+            {ownProfile && <button className="btn btn-primary" type="button" onClick={() => setTab('dasbor')}>▦ Dasbor</button>}
             <button className="btn btn-primary profile-support-shortcut" type="button" onClick={() => setTab('dukung')}>♡ Dukung</button>
             <button className="btn btn-ghost" type="button" onClick={() => void shareProfile()}>{copied ? 'Tautan disalin ✓' : 'Bagikan ↗'}</button>
           </div>
@@ -541,6 +542,7 @@ export function CreatorSocialProfile({
         </div>
         <div className="profile-view-tabs creator-social-tabs" role="tablist" aria-label="Bagian profil kreator">
           <button type="button" role="tab" aria-selected={tab === 'profil'} className={tab === 'profil' ? 'is-active' : ''} onClick={() => setTab('profil')}>Profil</button>
+          {ownProfile && <button type="button" role="tab" aria-selected={tab === 'dasbor'} className={tab === 'dasbor' ? 'is-active' : ''} onClick={() => setTab('dasbor')}>Dasbor</button>}
           <button type="button" role="tab" aria-selected={tab === 'posting'} className={tab === 'posting' ? 'is-active' : ''} onClick={() => setTab('posting')}>Postingan</button>
           <button type="button" role="tab" aria-selected={tab === 'reels'} className={tab === 'reels' ? 'is-active' : ''} onClick={() => setTab('reels')}>Reels</button>
           <button type="button" role="tab" aria-selected={tab === 'foto'} className={tab === 'foto' ? 'is-active' : ''} onClick={() => setTab('foto')}>Foto & Album</button>
@@ -549,6 +551,15 @@ export function CreatorSocialProfile({
         </div>
         {featureNotice && <p className="creator-social-notice" role="status">{featureNotice}</p>}
         <div className="profile-view-body creator-social-body">
+          {tab === 'dasbor' && ownProfile && (
+            <section className="creator-dashboard-panel" role="tabpanel">
+              <CreatorDashboard
+                profileId={profile.id}
+                profile={profile}
+                onOpenProfile={() => setTab('profil')}
+              />
+            </section>
+          )}
           {tab === 'profil' && (
             <section className="profile-about-panel" role="tabpanel">
               <h3>Tentang kreator</h3>
