@@ -539,7 +539,7 @@ export function App() {
     }
     setSavingProfile(true);
     setProfileMessage('');
-    const { error } = await supabase.from('profiles').upsert({
+    let { error } = await supabase.from('profiles').upsert({
       id: user.id,
       username: cleanUsername,
       display_name: profileName.trim(),
@@ -549,12 +549,34 @@ export function App() {
       album_urls: albumUrls,
       updated_at: new Date().toISOString(),
     });
+    let savedWithoutMediaColumns = false;
+    if (error && /cover_url|album_urls|updated_at|schema cache/i.test(error.message)) {
+      // Let basic profile details remain editable when preview is connected to
+      // a database that has not applied the additive media migration yet.
+      const legacySave = await supabase.from('profiles').upsert({
+        id: user.id,
+        username: cleanUsername,
+        display_name: profileName.trim(),
+        bio: bio.trim(),
+        avatar_url: avatarUrl.trim(),
+      });
+      error = legacySave.error;
+      savedWithoutMediaColumns = !error;
+    }
     if (error) {
-      setProfileMessage((error as any).code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + (error as any).message);
+      setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan profil. Periksa izin akses database atau migration.');
     } else {
-      setProfileMessage('Profil berhasil disimpan.');
-      const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
-      if (data) setProfiles(data as CreatorProfile[]);
+      setProfileMessage(savedWithoutMediaColumns
+        ? 'Profil dasar berhasil disimpan. Sampul dan album belum bisa disimpan sampai migration media diterapkan di database ini.'
+        : 'Profil dan media berhasil disimpan.');
+      const { data, error: refreshError } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
+      if (!refreshError && data) setProfiles(data as CreatorProfile[]);
+      else {
+        const legacy = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+        if (!legacy.error && legacy.data) {
+          setProfiles(legacy.data.map((profile) => ({ ...profile, cover_url: null, album_urls: [], social_links: {}, is_public: true, updated_at: profile.created_at })) as CreatorProfile[]);
+        }
+      }
     }
     setSavingProfile(false);
   };
