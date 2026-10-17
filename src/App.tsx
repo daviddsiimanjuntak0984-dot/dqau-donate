@@ -235,7 +235,7 @@ export function App() {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim() || window.location.origin },
         });
         if (error) throw error;
         if (!data.session) {
@@ -274,12 +274,12 @@ export function App() {
     }
   };
 
-  const handleOAuth = async (provider: 'google' | 'facebook' | 'tiktok') => {
+  const handleOAuth = async (provider: 'google' | 'facebook') => {
     setLoading(true);
     setAuthMessage({ text: 'Menghubungkan ke ' + provider + '...', isError: false });
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: provider as 'google' | 'facebook',
+        provider,
         options: { redirectTo: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim() || window.location.origin },
       });
       if (error) throw error;
@@ -700,14 +700,6 @@ export function App() {
                 <button
                   type="button"
                   className="secondary"
-                  disabled={loading}
-                  onClick={() => handleOAuth('tiktok')}
-                >
-                  TikTok
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
                   id="showPhoneAuth"
                   onClick={() => {
                     setShowPhoneAuth(true);
@@ -797,7 +789,7 @@ export function App() {
           onClick={closeCreatorProfile}
         >
           <section className="profile-dialog" ref={creatorDialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()} aria-label={`Profil ${selectedProfile.display_name || selectedProfile.username}`}>
-            <header className="profile-cover" aria-label="Sampul profil kreator"><span className="cover-caption">KREATOR DQAU</span></header>
+            <div className="profile-cover" role="img" aria-label="Sampul profil kreator"><span className="cover-caption">KREATOR DQAU</span></div>
             <div className="profile-identity">
               {selectedProfile.avatar_url ? <img className="profile-large-avatar" src={selectedProfile.avatar_url} alt={`Foto profil ${selectedProfile.display_name || selectedProfile.username}`} /> : <div className="profile-large-avatar profile-initials" aria-label="Avatar inisial">{(selectedProfile.display_name || selectedProfile.username || 'K').trim().charAt(0).toUpperCase()}</div>}
               <div className="profile-heading"><h2 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h2><span className="profile-handle">@{selectedProfile.username}</span><span className="profile-joined">Bergabung {selectedProfile.created_at && !Number.isNaN(Date.parse(selectedProfile.created_at)) ? new Date(selectedProfile.created_at).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : 'di Dqau Donate'}</span></div>
