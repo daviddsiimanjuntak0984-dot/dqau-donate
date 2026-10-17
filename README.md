@@ -24,7 +24,7 @@ cd dqau-donate
 npm install
 cp .env.example .env.local
 npm run dev
-`
+```
 
 Isi `.env.local` dengan URL proyek dan publishable/anon key Supabase. Variabel frontend yang tersedia:
 
@@ -52,7 +52,7 @@ npm install
 npm run dev
 npm run build
 npm run preview
-`
+```
 
 Perintah `npm ci` hanya dapat digunakan setelah `package-lock.json` dibuat/di-commit. Jika lockfile tersedia di branch kamu, gunakan `npm ci && npm run build`.
 
