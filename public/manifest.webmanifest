@@ -1,15 +1,16 @@
 {
-  "name": "Dqau Donate",
-  "short_name": "DqauDonate",
-  "start_url": ".",
+  "id": "/",
+  "name": "Dqau Donate — Dukung Kreator",
+  "short_name": "Dqau Donate",
+  "description": "Temukan kreator dan dukung karya kreatif.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0d0b17",
-  "theme_color": "#9b72ff",
+  "theme_color": "#0d0b17",
   "icons": [
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    }
+    { "src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }
