@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import type { User } from '@supabase/supabase-js';
 
 interface CreatorProfile {
@@ -124,6 +124,11 @@ export function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setProfileLoading(false);
+      setProfileMessage('Koneksi Supabase belum dikonfigurasi. Login dan data kreator belum tersedia sampai variabel deployment diatur.');
+      return;
+    }
     const loadProfiles = async () => {
       setProfileLoading(true);
       const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
@@ -184,6 +189,10 @@ export function App() {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Login belum tersedia: konfigurasi Supabase pada Cloudflare Pages belum lengkap. Admin perlu mengatur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY, lalu deploy ulang.', isError: true });
+      return;
+    }
     setLoading(true);
     setAuthMessage({
       text: authMode === 'signup' ? 'Membuat akun...' : 'Memeriksa akun...',
@@ -235,6 +244,10 @@ export function App() {
   };
 
   const handleOAuth = async (provider: 'google' | 'facebook' | 'tiktok') => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Login belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     setLoading(true);
     setAuthMessage({ text: 'Menghubungkan ke ' + provider + '...', isError: false });
     try {
@@ -254,6 +267,10 @@ export function App() {
   };
 
   const handleSendPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Login nomor HP belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     const trimmed = phoneNumber.trim();
     if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
       setAuthMessage({
@@ -280,6 +297,10 @@ export function App() {
   };
 
   const handleVerifyPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Verifikasi nomor HP belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     const phone = phoneNumber.trim();
     const token = phoneCode.trim();
     if (!phone || !token) {
