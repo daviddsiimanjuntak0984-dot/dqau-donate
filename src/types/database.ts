@@ -11,8 +11,13 @@ export interface Profile {
   username: string;
   display_name: string;
   bio: string;
-  avatar_url: string | null;
+  avatar_url: string;
+  cover_url: string;
+  album_urls: string[];
+  social_links: Record<string, string>;
+  is_public: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export type DonationStatus =
