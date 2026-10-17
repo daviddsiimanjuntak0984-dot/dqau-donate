@@ -449,7 +449,7 @@ export function CreatorSocialProfile({
   };
 
   const shareProfile = async () => {
-    const url = window.location.origin + '/?creator=' + encodeURIComponent(profile.username);
+    const url = window.location.origin + '/u/' + encodeURIComponent(profile.username);
     try {
       if (navigator.share) await navigator.share({ title: profile.display_name || profile.username, text: 'Lihat profil kreator di Dqua Donate', url });
       else {
