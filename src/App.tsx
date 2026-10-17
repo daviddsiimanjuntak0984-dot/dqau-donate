@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
 import type { User } from '@supabase/supabase-js';
 import { OverlaySettings, OverlayView } from './overlay';
-import { DonationForm } from './DonationForm';
+import { CreatorDashboard, CreatorSocialProfile } from './CreatorSocial';
 
 interface CreatorProfile {
   id: string;
@@ -13,6 +13,8 @@ interface CreatorProfile {
   cover_url: string | null;
   album_urls: string[];
   social_links: Record<string, string>;
+  category: string;
+  location: string;
   is_public: boolean;
   created_at: string;
   updated_at: string;
@@ -124,6 +126,8 @@ export function App() {
   const [profileName, setProfileName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [creatorCategory, setCreatorCategory] = useState('');
+  const [creatorLocation, setCreatorLocation] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -134,7 +138,6 @@ export function App() {
   const [albumUploading, setAlbumUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
-  const [selectedProfileTab, setSelectedProfileTab] = useState<'profil' | 'galeri' | 'dukung'>('profil');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -146,12 +149,12 @@ export function App() {
     const loadProfiles = async () => {
       setProfileLoading(true);
       setProfileLoadMessage('');
-      const extendedSelect = 'id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at';
+      const extendedSelect = 'id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, category, location, is_public, created_at, updated_at';
       const { data, error } = await supabase.from('profiles').select(extendedSelect).order('created_at', { ascending: false });
 
       if (!error && data) {
         setProfiles(data as CreatorProfile[]);
-      } else if (error && /cover_url|album_urls|social_links|is_public|updated_at|schema cache/i.test(error.message)) {
+      } else if (error && /cover_url|album_urls|social_links|category|location|is_public|updated_at|schema cache/i.test(error.message)) {
         // Branch previews may temporarily target a database that has not received
         // the additive profile-media migration yet. Keep older public profiles readable.
         const legacy = await supabase
@@ -164,6 +167,8 @@ export function App() {
             cover_url: null,
             album_urls: [],
             social_links: {},
+            category: '',
+            location: '',
             is_public: true,
             updated_at: profile.created_at,
           })) as CreatorProfile[]);
@@ -197,6 +202,8 @@ export function App() {
       setProfileName('');
       setUsername('');
       setBio('');
+      setCreatorCategory('');
+      setCreatorLocation('');
       setAvatarUrl('');
       setAvatarPreview(null);
       setCoverUrl('');
@@ -207,11 +214,11 @@ export function App() {
     const loadMyProfile = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, display_name, bio, avatar_url, cover_url, album_urls')
+        .select('username, display_name, bio, avatar_url, cover_url, album_urls, category, location')
         .eq('id', user.id)
         .maybeSingle();
       let profile = data;
-      if (error && /cover_url|album_urls|schema cache/i.test(error.message)) {
+      if (error && /cover_url|album_urls|category|location|schema cache/i.test(error.message)) {
         const legacy = await supabase
           .from('profiles')
           .select('username, display_name, bio, avatar_url, created_at')
@@ -221,7 +228,7 @@ export function App() {
           setProfileMessage('Profil belum dapat dimuat. Periksa konfigurasi database.');
           return;
         }
-        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [] } : null;
+        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [], category: '', location: '' } : null;
         setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Simpan perubahan media setelah migration diterapkan.');
       } else if (error) {
         setProfileMessage('Gagal memuat profil. Periksa izin akses database.');
@@ -231,6 +238,8 @@ export function App() {
         setProfileName(profile.display_name || '');
         setUsername(profile.username || '');
         setBio(profile.bio || '');
+        setCreatorCategory(profile.category || '');
+        setCreatorLocation(profile.location || '');
         setAvatarUrl(profile.avatar_url || '');
         setAvatarPreview(profile.avatar_url || null);
         setCoverUrl(profile.cover_url || '');
@@ -396,7 +405,7 @@ export function App() {
 
   const filteredProfiles = profiles.filter((profile) => {
     const q = search.toLowerCase().trim();
-    return !q || [profile.username, profile.display_name, profile.bio].some(v => (v || '').toLowerCase().includes(q));
+    return !q || [profile.username, profile.display_name, profile.bio, profile.category, profile.location].some(v => (v || '').toLowerCase().includes(q));
   });
 
   const uploadCreatorMedia = async (file: File, folder: 'avatar' | 'cover' | 'album'): Promise<string | null> => {
@@ -544,13 +553,15 @@ export function App() {
       username: cleanUsername,
       display_name: profileName.trim(),
       bio: bio.trim(),
+      category: creatorCategory.trim(),
+      location: creatorLocation.trim(),
       avatar_url: avatarUrl.trim(),
       cover_url: coverUrl.trim(),
       album_urls: albumUrls,
       updated_at: new Date().toISOString(),
     });
     let savedWithoutMediaColumns = false;
-    if (error && /cover_url|album_urls|updated_at|schema cache/i.test(error.message)) {
+    if (error && /cover_url|album_urls|category|location|updated_at|schema cache/i.test(error.message)) {
       // Let basic profile details remain editable when preview is connected to
       // a database that has not applied the additive media migration yet.
       const legacySave = await supabase.from('profiles').upsert({
@@ -700,6 +711,12 @@ export function App() {
                 placeholder="Ceritakan tentang karya kamu"
               />
 
+              <label htmlFor="creatorCategory">Kategori kreator</label>
+              <input id="creatorCategory" value={creatorCategory} onChange={(event) => setCreatorCategory(event.target.value)} maxLength={60} placeholder="Misalnya gamer, ilustrator, musik" />
+
+              <label htmlFor="creatorLocation">Lokasi (opsional)</label>
+              <input id="creatorLocation" value={creatorLocation} onChange={(event) => setCreatorLocation(event.target.value)} maxLength={80} placeholder="Kota atau wilayah yang ingin ditampilkan" />
+
               <label htmlFor="creatorAvatar">Foto profil</label>
               <div className="media-editor-row">
                 {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="Pratinjau foto profil" /> : <div className="avatar">👤</div>}
@@ -733,6 +750,19 @@ export function App() {
               <button className="btn btn-primary" type="submit" disabled={savingProfile || avatarUploading || coverUploading || albumUploading}>{savingProfile ? 'Menyimpan…' : (avatarUploading || coverUploading || albumUploading) ? 'Menunggu unggahan selesai…' : 'Simpan profil'}</button>
               {profileMessage && <p className="message" role="status">{profileMessage}</p>}
             </form>
+            <CreatorDashboard
+              profileId={user.id}
+              profile={profiles.find((item) => item.id === user.id) || null}
+              onOpenProfile={() => {
+                const ownProfile = profiles.find((item) => item.id === user.id);
+                if (ownProfile) setSelectedProfile(ownProfile);
+              }}
+              onNeedLogin={() => {
+                setAuthMode('login');
+                setAuthMessage({ text: '', isError: false });
+                setModalOpen(true);
+              }}
+            />
             <OverlaySettings userId={user.id} username={username || user.email || user.id} />
           </section>
         )}
@@ -995,71 +1025,18 @@ export function App() {
       )}
 
       {selectedProfile && (
-        <div
-          className="modal profile-view-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="creatorDialogTitle"
-          onClick={() => setSelectedProfile(null)}
-        >
-          <div className="profile-view-dialog" onClick={(e) => e.stopPropagation()}>
-            <button className="close profile-view-close" type="button" aria-label="Tutup profil" onClick={() => setSelectedProfile(null)}>×</button>
-            <div className="profile-view-cover">
-              {selectedProfile.cover_url ? <img src={selectedProfile.cover_url} alt={`Sampul ${selectedProfile.display_name || selectedProfile.username}`} /> : <div className="profile-view-cover-placeholder"><span>✦</span><span>DQUA CREATOR</span></div>}
-              <div className="profile-view-cover-shade" />
-            </div>
-            <div className="profile-view-identity">
-              {selectedProfile.avatar_url
-                ? <img className="profile-view-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.display_name || selectedProfile.username} />
-                : <div className="profile-view-avatar profile-view-avatar-fallback">{(selectedProfile.display_name || selectedProfile.username || '').charAt(0).toUpperCase()}</div>}
-              <div className="profile-view-name">
-                <h2 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h2>
-                <span>@{selectedProfile.username}</span>
-                <small>{selectedProfile.album_urls?.length || 0} foto di album kreator</small>
-              </div>
-              <button className="btn btn-primary profile-support-shortcut" type="button" onClick={() => setSelectedProfileTab('dukung')}>♡ Dukung</button>
-            </div>
-            <div className="profile-view-tabs" role="tablist" aria-label="Bagian profil kreator">
-              <button type="button" role="tab" aria-selected={selectedProfileTab === 'profil'} className={selectedProfileTab === 'profil' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('profil')}>Profil</button>
-              <button type="button" role="tab" aria-selected={selectedProfileTab === 'galeri'} className={selectedProfileTab === 'galeri' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('galeri')}>Foto & Album</button>
-              <button type="button" role="tab" aria-selected={selectedProfileTab === 'dukung'} className={selectedProfileTab === 'dukung' ? 'is-active' : ''} onClick={() => setSelectedProfileTab('dukung')}>Dukung</button>
-            </div>
-            <div className="profile-view-body">
-              {selectedProfileTab === 'profil' && (
-                <section className="profile-about-panel" role="tabpanel">
-                  <h3>Tentang kreator</h3>
-                  <p>{selectedProfile.bio || 'Kreator ini belum menambahkan bio.'}</p>
-                  <div className="profile-about-meta"><span>✦</span><div><strong>@{selectedProfile.username}</strong><small>Profil kreator Dqua Donate</small></div></div>
-                  {selectedProfile.album_urls?.length > 0 && (
-                    <div className="profile-gallery-preview">
-                      <div className="profile-gallery-preview-heading"><h3>Foto terbaru</h3><button type="button" onClick={() => setSelectedProfileTab('galeri')}>Lihat semua</button></div>
-                      <div className="profile-gallery-grid compact">
-                        {selectedProfile.album_urls.slice(0, 3).map((url, index) => <img src={url} key={url} alt={`Foto kreator ${index + 1}`} loading="lazy" />)}
-                      </div>
-                    </div>
-                  )}
-                </section>
-              )}
-              {selectedProfileTab === 'galeri' && (
-                <section className="profile-gallery-panel" role="tabpanel">
-                  <h3>Album foto</h3>
-                  {selectedProfile.album_urls?.length ? (
-                    <div className="profile-gallery-grid">
-                      {selectedProfile.album_urls.map((url, index) => <a href={url} target="_blank" rel="noopener noreferrer" key={url} aria-label={`Buka foto album ${index + 1} ukuran penuh`}><img src={url} alt={`Foto album ${index + 1}`} loading="lazy" /></a>)}
-                    </div>
-                  ) : <p className="profile-empty-gallery">Kreator belum menambahkan foto album.</p>}
-                </section>
-              )}
-              {selectedProfileTab === 'dukung' && (
-                <section className="profile-support-panel" role="tabpanel">
-                  <DonationForm creatorId={selectedProfile.id} creatorName={selectedProfile.display_name || selectedProfile.username} />
-                </section>
-              )}
-            </div>
-          </div>
-        </div>
+        <CreatorSocialProfile
+          profile={selectedProfile}
+          viewerId={user?.id || null}
+          onClose={() => setSelectedProfile(null)}
+          onNeedLogin={() => {
+            setAuthMode('login');
+            setAuthMessage({ text: '', isError: false });
+            setShowPhoneAuth(false);
+            setModalOpen(true);
+          }}
+        />
       )}
-
       {alertInfo && (
         <div
           className="modal"
