@@ -13,6 +13,13 @@ ALTER TABLE public.profiles
 ALTER TABLE public.profiles VALIDATE CONSTRAINT profiles_album_urls_is_array;
 
 -- Respect public/private profile visibility and keep owner access to their own profile.
+-- Remove both policy names used by the staging schema and legacy production schema:
+-- permissive policies are combined with OR, so leaving an older "USING (true)"
+-- policy in place would silently bypass the private-profile check.
+DROP POLICY IF EXISTS "Public can view profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can create own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+
 DROP POLICY IF EXISTS profiles_read ON public.profiles;
 CREATE POLICY profiles_read ON public.profiles
   FOR SELECT TO anon, authenticated
