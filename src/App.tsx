@@ -98,6 +98,8 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState<{ text: string; isError: boolean }>({ text: '', isError: false });
+  const [confirmationPending, setConfirmationPending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showPhoneAuth, setShowPhoneAuth] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -115,6 +117,14 @@ export function App() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -179,11 +189,13 @@ export function App() {
         });
         if (error) throw error;
         if (!data.session) {
+          setConfirmationPending(true);
           setAuthMessage({
             text: 'Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.',
             isError: false,
           });
         } else {
+          setConfirmationPending(false);
           setAuthMessage({
             text: 'Akun berhasil dibuat dan kamu sudah masuk.',
             isError: false,
@@ -198,6 +210,7 @@ export function App() {
           password,
         });
         if (error) throw error;
+        setConfirmationPending(false);
         setAuthMessage({
           text: 'Berhasil masuk.',
           isError: false,
@@ -208,7 +221,46 @@ export function App() {
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
+      if (errorMessage.toLowerCase().includes('email not confirmed')) setConfirmationPending(true);
       setAuthMessage({ text: errorMessage, isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    const emailValue = email.trim();
+    if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+      setAuthMessage({ text: 'Masukkan alamat email yang valid terlebih dahulu.', isError: true });
+      return;
+    }
+    if (loading || resendCooldown > 0) return;
+
+    setLoading(true);
+    setAuthMessage({ text: 'Mengirim email konfirmasi…', isError: false });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: emailValue,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      setConfirmationPending(true);
+      setResendCooldown(60);
+      setAuthMessage({
+        text: 'Jika akun belum terverifikasi, email konfirmasi akan dikirim. Periksa kotak masuk dan folder spam.',
+        isError: false,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message.toLowerCase() : '';
+      const rateLimited = message.includes('rate limit') || message.includes('too many requests');
+      if (rateLimited) setResendCooldown(60);
+      setAuthMessage({
+        text: rateLimited
+          ? 'Permintaan terlalu sering. Tunggu 60 detik sebelum mencoba lagi.'
+          : 'Email konfirmasi belum bisa dikirim. Periksa konfigurasi email Supabase lalu coba lagi.',
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -544,6 +596,21 @@ export function App() {
                   {authMode === 'signup' ? 'Saya sudah punya akun' : 'Buat akun'}
                 </button>
               </div>
+              {(authMode === 'login' || confirmationPending) && (
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    id="resendConfirmation"
+                    disabled={loading || resendCooldown > 0}
+                    onClick={() => void handleResendConfirmation()}
+                  >
+                    {resendCooldown > 0
+                      ? `Kirim ulang email konfirmasi (${resendCooldown} dtk)`
+                      : 'Kirim ulang email konfirmasi'}
+                  </button>
+                </div>
+              )}
             </form>
 
             <div className="social-auth">
