@@ -358,3 +358,33 @@ footer {
 .profile-editor form button { margin-top:8px; }
 .creator-avatar-image { width:64px; height:64px; border-radius:18px; object-fit:cover; background:#39265c; margin-bottom:12px; border:1px solid var(--line); }
 .profile-detail-avatar { display:block; width:88px; height:88px; margin:0 auto 12px; }
+
+
+/* Auth recovery controls */
+.auth-support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+}
+.auth-text-button {
+  color: #c7b3ff;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 6px 2px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(199,179,255,.45);
+  text-underline-offset: 3px;
+}
+.auth-text-button:hover:not(:disabled) { color: #fff; }
+.auth-text-button:focus-visible { outline: 2px solid #c7b3ff; outline-offset: 3px; }
+@media (max-width: 520px) {
+  .auth-support-actions { flex-direction: column; gap: 2px; }
+}
