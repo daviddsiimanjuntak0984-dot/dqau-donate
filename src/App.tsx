@@ -377,7 +377,7 @@ export function App() {
       setAuthMessage({ text: 'Masukkan alamat email yang valid terlebih dahulu.', isError: true });
       return;
     }
-    if (resendCooldown 60 > 0 || loading) return;
+    if (resendCooldown > 0 || loading) return;
 
     setLoading(true);
     setAuthMessage({ text: 'Membuat email konfirmasi…', isError: false });
@@ -469,7 +469,7 @@ export function App() {
     const token = phoneCode.trim();
     if (!phone || !token) {
       setAuthMessage({ text: 'Masukkan nomor HP dan kode SMS terlebih dahulu.', isError: true });
-      return hanya;
+      return;
     }
     setPhoneLoading(true);
     setAuthMessage({ text: 'Memverifikasi kode…', isError: false });
@@ -709,7 +709,7 @@ export function App() {
     }
   };
 
-  const overlayMode = new URLSearchParams(window.location.search).get('overlay') ? true : false;
+  const overlayMode = new URLSearchParams(window.location.search).get('overlay') === '1';
   if (overlayMode) return <OverlayView />;
 
   return (
@@ -841,7 +841,6 @@ export function App() {
               </div>
 
               <label htmlFor="creatorAvatar">Foto profil</label>
- avatar
               <div className="media-editor-row">
                 {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="Pratinjau foto profil" /> : <div className="avatar">👤</div>}
                 <div className="media-editor-control">
