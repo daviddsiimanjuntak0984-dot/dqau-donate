@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { isSupabaseConfigured, supabase } from './supabase';
+import { initializeSupabase, isSupabaseConfigured, supabase } from './supabase';
 import { useDebounce } from './hooks/useDebounce';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import type { User } from '@supabase/supabase-js';
@@ -93,6 +93,7 @@ const PLATFORMS: PlatformCard[] = [
 ];
 
 export function App() {
+  const [supabaseReady, setSupabaseReady] = useState(isSupabaseConfigured);
   const [user, setUser] = useState<User | null>(null);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -136,6 +137,14 @@ export function App() {
   useFocusTrap(donateOpen, donateDialogRef, () => setDonateOpen(false));
 
   useEffect(() => {
+    let active = true;
+    void initializeSupabase().then(() => {
+      if (active) setSupabaseReady(isSupabaseConfigured);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) { setEntranceVisible(false); return; }
     const timeoutId = window.setTimeout(() => setEntranceVisible(false), 1150);
@@ -143,6 +152,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!supabaseReady) {
+      setProfileLoading(false);
+      return;
+    }
     const loadProfiles = async () => {
       setProfileLoading(true);
       const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
@@ -166,7 +179,7 @@ export function App() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabaseReady]);
 
   useEffect(() => {
     if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); setAvatarPreview(null); return; }
