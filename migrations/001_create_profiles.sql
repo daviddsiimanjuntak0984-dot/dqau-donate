@@ -16,7 +16,7 @@ alter table public.profiles enable row level security;
 create policy "Allow select for profiles" on public.profiles for select using (true);
 
 -- Allow authenticated user to insert their own profile
-create policy "Allow insert for owners" on public.profiles for insert with check (auth.uid() = id);
+create policy "Allow insert for owners" on public.profiles for insert using (auth.role() = 'authenticated') with check (auth.uid() = id);
 
 -- Allow owners to update their profile
 create policy "Allow update for owners" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);

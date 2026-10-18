@@ -1,40 +1,76 @@
-const CACHE_NAME = 'dqau-donate-v4';
-const OFFLINE_URL = '/offline.html';
-const PRECACHE_URLS = ['/', '/index.html', OFFLINE_URL, '/manifest.webmanifest', '/icon.svg', '/icon-192.svg', '/icon-512.svg', '/icon-192.png', '/icon-512.png'];
+const CACHE_PREFIX = 'dqau-cache-';
+const CACHE_NAME = 'dqau-cache-v2';
+const OFFLINE_URL = '/index.html';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll([OFFLINE_URL, '/']))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((key) => key.startsWith('dqau-donate-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
-    .then(() => self.clients.claim()));
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys
+          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request)
-      .then((response) => {
-        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
-        return response;
-      })
-      .catch(async () => (await caches.match(request)) || (await caches.match(OFFLINE_URL)) || (await caches.match('/index.html'))));
+  const requestUrl = new URL(request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+
+  const isNavigation = request.mode === 'navigate' ||
+    requestUrl.pathname === '/' ||
+    requestUrl.pathname === '/index.html';
+
+  // Network-first HTML avoids stale index.html references after new deployments.
+  if (isNavigation) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || !response.ok) return response;
+          const responseCopy = response.clone();
+          return caches.open(CACHE_NAME)
+            .then((cache) => cache.put(request, responseCopy))
+            .then(() => response)
+            .catch(() => response);
+        })
+        .catch(async () => {
+          const cachedPage = await caches.match(request);
+          if (cachedPage) return cachedPage;
+          const offlinePage = await caches.match(OFFLINE_URL);
+          return offlinePage || Response.error();
+        })
+    );
     return;
   }
 
-  if (/\.(?:js|css|svg|png|webmanifest|woff2?)$/i.test(url.pathname)) {
-    event.respondWith(caches.match(request).then((cached) => {
+  // Vite production assets use content-hashed filenames; cache those immutable assets.
+  event.respondWith(
+    caches.match(request).then(async (cached) => {
       if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+      const response = await fetch(request);
+      if (!response || !response.ok || !requestUrl.pathname.startsWith('/assets/')) {
         return response;
-      });
-    }));
-  }
+      }
+      const responseCopy = response.clone();
+      return caches.open(CACHE_NAME)
+        .then((cache) => cache.put(request, responseCopy))
+        .then(() => response)
+        .catch(() => response);
+    }).catch(async () => {
+      const offlinePage = await caches.match(OFFLINE_URL);
+      return offlinePage || Response.error();
+    })
+  );
 });

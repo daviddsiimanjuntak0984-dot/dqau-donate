@@ -1,8 +1,0 @@
-{
-  "name": "Dqau Donate",
-  "description": "Platform apresiasi karya dan dukungan untuk para kreator Indonesia.",
-  "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
