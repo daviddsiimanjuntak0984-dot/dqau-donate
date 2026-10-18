@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured, missingEnvVars } from './supabase';
 import type { User } from '@supabase/supabase-js';
+import { OverlaySettings, OverlayView } from './overlay';
+import { CreatorDashboard, CreatorSocialProfile } from './CreatorSocial';
 
-interface CreatorProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; }
-
+interface CreatorProfile {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string;
+  avatar_url: string | null;
+  cover_url: string | null;
+  album_urls: string[];
+  social_links: Record<string, string>;
+  category: string;
+  location: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 interface PlatformCard {
   id: string;
@@ -98,7 +113,6 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState<{ text: string; isError: boolean }>({ text: '', isError: false });
-  const [confirmationPending, setConfirmationPending] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showPasswordUpdate, setShowPasswordUpdate] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -112,28 +126,66 @@ export function App() {
   const [profiles, setProfiles] = useState<CreatorProfile[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileMessage, setProfileMessage] = useState('');
+  const [profileLoadMessage, setProfileLoadMessage] = useState('');
   const [profileName, setProfileName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [creatorCategory, setCreatorCategory] = useState('');
+  const [creatorLocation, setCreatorLocation] = useState('');
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUrl, setCoverUrl] = useState('');
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [albumUrls, setAlbumUrls] = useState<string[]>([]);
+  const [albumUploading, setAlbumUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<CreatorProfile | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = window.setTimeout(() => {
-      setResendCooldown((seconds) => Math.max(0, seconds - 1));
-    }, 1000);
-    return () => window.clearTimeout(timer);
-  }, [resendCooldown]);
-
-  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setProfileLoading(false);
+      setProfileMessage('Data kreator belum dapat dimuat karena konfigurasi Supabase belum tersedia. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Nilai konfigurasi tidak ditampilkan.');
+      return;
+    }
     const loadProfiles = async () => {
       setProfileLoading(true);
-      const { data, error } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
-      if (!error && data) setProfiles(data as CreatorProfile[]);
+      setProfileLoadMessage('');
+      const extendedSelect = 'id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, category, location, is_public, created_at, updated_at';
+      const { data, error } = await supabase.from('profiles').select(extendedSelect).order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setProfiles(data as CreatorProfile[]);
+      } else if (error && /cover_url|album_urls|social_links|category|location|is_public|updated_at|schema cache/i.test(error.message)) {
+        // Branch previews may temporarily target a database that has not received
+        // the additive profile-media migration yet. Keep older public profiles readable.
+        const legacy = await supabase
+          .from('profiles')
+          .select('id, username, display_name, bio, avatar_url, created_at')
+          .order('created_at', { ascending: false });
+        if (!legacy.error && legacy.data) {
+          setProfiles(legacy.data.map((profile) => ({
+            ...profile,
+            cover_url: null,
+            album_urls: [],
+            social_links: {},
+            category: '',
+            location: '',
+            is_public: true,
+            updated_at: profile.created_at,
+          })) as CreatorProfile[]);
+          setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Daftar kreator tetap tampil; unggah media baru aktif setelah migration diterapkan.');
+        } else {
+          setProfiles([]);
+          setProfileLoadMessage('Daftar kreator belum dapat dimuat. Periksa konfigurasi Supabase dan migration database.');
+        }
+      } else {
+        setProfiles([]);
+        setProfileLoadMessage('Daftar kreator belum dapat dimuat. Periksa konfigurasi Supabase dan izin akses database.');
+      }
       setProfileLoading(false);
     };
     void loadProfiles();
@@ -161,10 +213,56 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setProfileName(''); setUsername(''); setBio(''); setAvatarUrl(''); setAvatarPreview(null); return; }
+    if (!user) {
+      setProfileName('');
+      setUsername('');
+      setBio('');
+      setCreatorCategory('');
+      setCreatorLocation('');
+      setSocialLinks({});
+      setAvatarUrl('');
+      setAvatarPreview(null);
+      setCoverUrl('');
+      setCoverPreview(null);
+      setAlbumUrls([]);
+      return;
+    }
     const loadMyProfile = async () => {
-      const { data } = await supabase.from('profiles').select('username, display_name, bio, avatar_url').eq('id', user.id).maybeSingle();
-      if (data) { setProfileName(data.display_name || ''); setUsername(data.username || ''); setBio(data.bio || ''); setAvatarUrl(data.avatar_url || ''); setAvatarPreview(data.avatar_url || null); }
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username, display_name, bio, avatar_url, cover_url, album_urls, social_links, category, location')
+        .eq('id', user.id)
+        .maybeSingle();
+      let profile = data;
+      if (error && /cover_url|album_urls|social_links|category|location|schema cache/i.test(error.message)) {
+        const legacy = await supabase
+          .from('profiles')
+          .select('username, display_name, bio, avatar_url, created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (legacy.error) {
+          setProfileMessage('Profil belum dapat dimuat. Periksa konfigurasi database.');
+          return;
+        }
+        profile = legacy.data ? { ...legacy.data, cover_url: null, album_urls: [], social_links: {}, category: '', location: '' } : null;
+        setProfileLoadMessage('Database yang terhubung belum menjalankan migration sampul/album. Simpan perubahan media setelah migration diterapkan.');
+      } else if (error) {
+        setProfileMessage('Gagal memuat profil. Periksa izin akses database.');
+        return;
+      }
+      if (profile) {
+        setProfileName(profile.display_name || '');
+        setUsername(profile.username || '');
+        setBio(profile.bio || '');
+        setCreatorCategory(profile.category || '');
+        setCreatorLocation(profile.location || '');
+        setSocialLinks(profile.social_links && typeof profile.social_links === 'object' ? profile.social_links : {});
+        setAvatarUrl(profile.avatar_url || '');
+        setAvatarPreview(profile.avatar_url || null);
+        setCoverUrl(profile.cover_url || '');
+        setCoverPreview(profile.cover_url || null);
+        setAlbumUrls(Array.isArray(profile.album_urls) ? profile.album_urls.filter((url: unknown): url is string => typeof url === 'string') : []);
+      }
     };
     void loadMyProfile();
   }, [user]);
@@ -179,9 +277,6 @@ export function App() {
       }
     } else {
       setAuthMode('login');
-      setShowPasswordReset(false);
-      setShowPasswordUpdate(false);
-      setConfirmPassword('');
       setAuthMessage({ text: '', isError: false });
       setShowPhoneAuth(false);
       setModalOpen(true);
@@ -190,16 +285,17 @@ export function App() {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (showPasswordUpdate && (password.length < 6 || password !== confirmPassword)) {
-      setAuthMessage({
-        text: password.length < 6 ? 'Kata sandi baru minimal 6 karakter.' : 'Konfirmasi kata sandi belum sama.',
-        isError: true,
-      });
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Autentikasi belum tersedia karena konfigurasi Supabase belum lengkap. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Nilai konfigurasi tidak ditampilkan.', isError: true });
       return;
     }
-    if ((showPasswordReset || (!showPasswordUpdate && !showPhoneAuth)) && !email.trim()) {
+
+    if (!email.trim() && (showPasswordReset || (!showPasswordUpdate && !showPhoneAuth))) {
       setAuthMessage({ text: 'Masukkan alamat email terlebih dahulu.', isError: true });
+      return;
+    }
+    if (showPasswordUpdate && (password.length < 6 || password !== confirmPassword)) {
+      setAuthMessage({ text: password.length < 6 ? 'Kata sandi baru minimal 6 karakter.' : 'Konfirmasi kata sandi belum sama.', isError: true });
       return;
     }
 
@@ -207,7 +303,7 @@ export function App() {
     setAuthMessage({
       text: showPasswordReset ? 'Meminta tautan pemulihan…'
         : showPasswordUpdate ? 'Memperbarui kata sandi…'
-        : authMode === 'signup' ? 'Membuat akun...' : 'Memeriksa akun...',
+        : authMode === 'signup' ? 'Membuat akun…' : 'Memeriksa akun…',
       isError: false,
     });
 
@@ -227,8 +323,7 @@ export function App() {
         setShowPasswordUpdate(false);
         setPassword('');
         setConfirmPassword('');
-        setAuthMessage({ text: 'Kata sandi berhasil diperbarui. Kamu bisa melanjutkan menggunakan akunmu.', isError: false });
-        setTimeout(() => setModalOpen(false), 1200);
+        setAuthMessage({ text: 'Kata sandi berhasil diperbarui. Silakan masuk dengan kata sandi baru.', isError: false });
       } else if (authMode === 'signup') {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
@@ -237,17 +332,12 @@ export function App() {
         });
         if (error) throw error;
         if (!data.session) {
-          setConfirmationPending(true);
           setAuthMessage({
-            text: 'Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.',
+            text: 'Jika pendaftaran diterima, email konfirmasi akan dikirim. Periksa kotak masuk dan folder spam sebelum masuk.',
             isError: false,
           });
         } else {
-          setConfirmationPending(false);
-          setAuthMessage({
-            text: 'Akun berhasil dibuat dan kamu sudah masuk.',
-            isError: false,
-          });
+          setAuthMessage({ text: 'Akun berhasil dibuat dan kamu sudah masuk.', isError: false });
           setTimeout(() => setModalOpen(false), 900);
         }
       } else {
@@ -256,38 +346,40 @@ export function App() {
           password,
         });
         if (error) throw error;
-        setConfirmationPending(false);
         setAuthMessage({ text: 'Berhasil masuk.', isError: false });
         setTimeout(() => setModalOpen(false), 900);
       }
     } catch (err: unknown) {
-      const rawMessage = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
+      const rawMessage = err instanceof Error ? err.message : '';
       const lower = rawMessage.toLowerCase();
-      let friendlyMessage = rawMessage;
-      if (lower.includes('invalid login credentials')) friendlyMessage = 'Email atau kata sandi tidak cocok.';
-      else if (lower.includes('email not confirmed')) {
-        setConfirmationPending(true);
-        friendlyMessage = 'Email belum dikonfirmasi. Periksa email atau kirim ulang konfirmasi.';
-      } else if (lower.includes('password should be at least')) friendlyMessage = 'Kata sandi minimal 6 karakter.';
-      else if (lower.includes('rate limit') || lower.includes('too many requests')) friendlyMessage = 'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.';
-      else if (lower.includes('expired') || (lower.includes('invalid') && lower.includes('token'))) friendlyMessage = 'Tautan pemulihan tidak valid atau sudah kedaluwarsa. Minta tautan baru.';
-      else if (/key|secret|token|authorization|jwt/i.test(rawMessage)) friendlyMessage = 'Autentikasi gagal. Periksa konfigurasi Supabase lalu coba lagi.';
-      setAuthMessage({ text: friendlyMessage, isError: true });
+      let errorMessage = 'Terjadi kesalahan. Coba lagi.';
+      if (lower.includes('invalid login credentials')) errorMessage = 'Email atau kata sandi tidak cocok.';
+      else if (lower.includes('email not confirmed')) errorMessage = 'Email belum dikonfirmasi. Periksa email atau gunakan tombol kirim ulang konfirmasi.';
+      else if (lower.includes('password should be at least')) errorMessage = 'Kata sandi minimal 6 karakter.';
+      else if (lower.includes('rate limit') || lower.includes('too many requests')) errorMessage = 'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.';
+      else if (lower.includes('expired') || lower.includes('invalid') && lower.includes('token')) errorMessage = 'Tautan autentikasi tidak valid atau sudah kedaluwarsa. Minta tautan baru.';
+      else if (lower.includes('already registered')) errorMessage = 'Email ini mungkin sudah terdaftar. Coba masuk atau minta konfirmasi ulang.';
+      else if (rawMessage && !/key|secret|token|authorization|jwt/i.test(rawMessage)) errorMessage = rawMessage;
+      setAuthMessage({ text: errorMessage, isError: true });
     } finally {
       setLoading(false);
     }
   };
 
   const handleResendConfirmation = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Konfirmasi email belum tersedia karena konfigurasi Supabase belum lengkap.', isError: true });
+      return;
+    }
     const emailValue = email.trim();
     if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
       setAuthMessage({ text: 'Masukkan alamat email yang valid terlebih dahulu.', isError: true });
       return;
     }
-    if (loading || resendCooldown > 0) return;
+    if (resendCooldown > 0 || loading) return;
 
     setLoading(true);
-    setAuthMessage({ text: 'Mengirim email konfirmasi…', isError: false });
+    setAuthMessage({ text: 'Meminta email konfirmasi…', isError: false });
     try {
       const { error } = await supabase.auth.resend({
         type: 'signup',
@@ -295,28 +387,30 @@ export function App() {
         options: { emailRedirectTo: window.location.origin },
       });
       if (error) throw error;
-      setConfirmationPending(true);
       setResendCooldown(60);
       setAuthMessage({
-        text: 'Jika akun belum terverifikasi, email konfirmasi akan dikirim. Periksa kotak masuk dan folder spam.',
+        text: 'Jika akun belum terverifikasi, email konfirmasi akan dikirim bila diizinkan. Periksa kotak masuk dan folder spam.',
         isError: false,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message.toLowerCase() : '';
-      const rateLimited = message.includes('rate limit') || message.includes('too many requests');
-      if (rateLimited) setResendCooldown(60);
+      const rawMessage = err instanceof Error ? err.message.toLowerCase() : '';
       setAuthMessage({
-        text: rateLimited
-          ? 'Permintaan terlalu sering. Tunggu 60 detik sebelum mencoba lagi.'
-          : 'Email konfirmasi belum bisa dikirim. Periksa konfigurasi email Supabase lalu coba lagi.',
+        text: rawMessage.includes('rate limit') || rawMessage.includes('too many requests')
+          ? 'Permintaan email terlalu sering. Tunggu sebentar sebelum mencoba lagi.'
+          : 'Email konfirmasi belum dapat dikirim. Periksa email, konfigurasi SMTP, dan coba lagi nanti.',
         isError: true,
       });
+      setResendCooldown(60);
     } finally {
       setLoading(false);
     }
   };
 
   const handleOAuth = async (provider: 'google' | 'facebook' | 'tiktok') => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Login belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     setLoading(true);
     setAuthMessage({ text: 'Menghubungkan ke ' + provider + '...', isError: false });
     try {
@@ -336,6 +430,10 @@ export function App() {
   };
 
   const handleSendPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Login nomor HP belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     const trimmed = phoneNumber.trim();
     if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
       setAuthMessage({
@@ -362,6 +460,10 @@ export function App() {
   };
 
   const handleVerifyPhoneCode = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Verifikasi nomor HP belum tersedia karena konfigurasi Supabase di deployment belum lengkap.', isError: true });
+      return;
+    }
     const phone = phoneNumber.trim();
     const token = phoneCode.trim();
     if (!phone || !token) {
@@ -387,39 +489,124 @@ export function App() {
 
   const filteredProfiles = profiles.filter((profile) => {
     const q = search.toLowerCase().trim();
-    return !q || [profile.username, profile.display_name, profile.bio].some(v => (v || '').toLowerCase().includes(q));
+    return !q || [profile.username, profile.display_name, profile.bio, profile.category, profile.location].some(v => (v || '').toLowerCase().includes(q));
   });
 
-  const uploadAvatar = async (file: File) => {
-    if (!user) { setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah avatar.'); return null; }
-    if (!file.type.startsWith('image/')) { setProfileMessage('Hanya file gambar yang diizinkan.'); return null; }
-    if (file.size > 2 * 1024 * 1024) { setProfileMessage('Ukuran maksimal avatar 2MB.'); return null; }
-    setAvatarUploading(true);
-    setProfileMessage('Mengunggah avatar...');
+  const uploadCreatorMedia = async (file: File, folder: 'avatar' | 'cover' | 'album'): Promise<string | null> => {
+    if (!user) {
+      setProfileMessage('Silakan masuk terlebih dahulu untuk mengunggah gambar.');
+      return null;
+    }
+    const allowedTypes: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'image/avif': 'avif',
+    };
+    if (!allowedTypes[file.type]) {
+      setProfileMessage('Format gambar yang didukung: JPG, PNG, WebP, GIF, atau AVIF.');
+      return null;
+    }
+    const maxBytes = folder === 'avatar' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setProfileMessage(folder === 'avatar' ? 'Ukuran avatar maksimal 2MB.' : 'Ukuran sampul/album maksimal 5MB per gambar.');
+      return null;
+    }
+
+    const bucket = 'creator-media';
+    const filePath = `${user.id}/${folder}/${crypto.randomUUID()}.${allowedTypes[file.type]}`;
     try {
-      const filePath = `${user.id}/${Date.now()}_${file.name}`;
-      const bucket = 'avatars';
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, {
+        upsert: false,
+        contentType: file.type,
+        cacheControl: '3600',
+      });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
-      const publicUrl = urlData?.publicUrl || '';
-      setAvatarUrl(publicUrl);
-      setAvatarPreview(publicUrl);
-      setProfileMessage('Avatar berhasil diunggah. Ingat untuk menyimpan profil.');
-      return publicUrl;
+      return urlData.publicUrl || null;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengunggah avatar.';
+      const msg = err instanceof Error ? err.message : 'Gagal mengunggah gambar.';
       setProfileMessage(msg);
       return null;
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    setAvatarUploading(true);
+    setProfileMessage('Mengunggah foto profil…');
+    try {
+      const publicUrl = await uploadCreatorMedia(file, 'avatar');
+      if (!publicUrl) return null;
+      setAvatarUrl(publicUrl);
+      setAvatarPreview(publicUrl);
+      setProfileMessage('Foto profil berhasil diunggah. Simpan perubahan profil.');
+      return publicUrl;
     } finally {
       setAvatarUploading(false);
     }
   };
 
+  const handleCoverFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const localPreview = URL.createObjectURL(file);
+    setCoverPreview(localPreview);
+    setCoverUploading(true);
+    void (async () => {
+      try {
+        const publicUrl = await uploadCreatorMedia(file, 'cover');
+        if (publicUrl) {
+          setCoverUrl(publicUrl);
+          setCoverPreview(publicUrl);
+          setProfileMessage('Foto sampul berhasil diunggah. Simpan perubahan profil.');
+        } else {
+          setCoverPreview(coverUrl || null);
+        }
+      } finally {
+        URL.revokeObjectURL(localPreview);
+        setCoverUploading(false);
+      }
+    })();
+  };
+
+  const handleAlbumFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const selectedFiles = Array.from(input.files || []);
+    if (!selectedFiles.length) return;
+    const remainingSlots = Math.max(0, 9 - albumUrls.length);
+    if (remainingSlots === 0) {
+      setProfileMessage('Album sudah mencapai batas 9 foto. Hapus beberapa foto terlebih dahulu.');
+      input.value = '';
+      return;
+    }
+    if (selectedFiles.length > remainingSlots) {
+      setProfileMessage(`Album hanya menerima 9 foto. Maksimal ${remainingSlots} foto lagi yang akan diunggah.`);
+    }
+    setAlbumUploading(true);
+    void (async () => {
+      const uploaded: string[] = [];
+      for (const file of selectedFiles.slice(0, remainingSlots)) {
+        const url = await uploadCreatorMedia(file, 'album');
+        if (url) uploaded.push(url);
+      }
+      if (uploaded.length) {
+        setAlbumUrls((current) => [...current, ...uploaded].slice(0, 9));
+        setProfileMessage(`${uploaded.length} foto album berhasil diunggah. Simpan perubahan profil.`);
+      }
+      setAlbumUploading(false);
+      input.value = '';
+    })();
+  };
+
+  const removeAlbumPhoto = (url: string) => {
+    setAlbumUrls((current) => current.filter((item) => item !== url));
+    setProfileMessage('Foto dihapus dari daftar album. Simpan profil untuk menyimpan perubahan.');
+  };
+
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files && e.target.files[0];
     if (f) {
-      // quick client preview
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(String(reader.result));
       reader.readAsDataURL(f);
@@ -430,18 +617,98 @@ export function App() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (!profileName.trim() || profileName.trim().length > 40) {
+      setProfileMessage('Nama tampilan wajib diisi dan maksimal 40 karakter.');
+      return;
+    }
+    if (bio.trim().length > 300) {
+      setProfileMessage('Bio maksimal 300 karakter.');
+      return;
+    }
     const cleanUsername = username.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,24}$/.test(cleanUsername)) { setProfileMessage('Username harus 3–24 karakter: huruf kecil, angka, atau garis bawah.'); return; }
-    setSavingProfile(true); setProfileMessage('');
-    const { error } = await supabase.from('profiles').upsert({ id: user.id, username: cleanUsername, display_name: profileName.trim(), bio: bio.trim(), avatar_url: avatarUrl.trim() || null });
-    if (error) setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan: ' + error.message);
-    else {
-      setProfileMessage('Profil berhasil disimpan.');
-      const { data } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
-      if (data) setProfiles(data as CreatorProfile[]);
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      setProfileMessage('Username harus 3–20 karakter: huruf kecil, angka, atau garis bawah.');
+      return;
+    }
+    setSavingProfile(true);
+    setProfileMessage('');
+    let { error } = await supabase.from('profiles').upsert({
+      id: user.id,
+      username: cleanUsername,
+      display_name: profileName.trim(),
+      bio: bio.trim(),
+      category: creatorCategory.trim(),
+      location: creatorLocation.trim(),
+      social_links: Object.fromEntries(Object.entries(socialLinks).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)),
+      avatar_url: avatarUrl.trim(),
+      cover_url: coverUrl.trim(),
+      album_urls: albumUrls,
+      updated_at: new Date().toISOString(),
+    });
+    let savedWithoutMediaColumns = false;
+    if (error && /cover_url|album_urls|social_links|category|location|updated_at|schema cache/i.test(error.message)) {
+      // Let basic profile details remain editable when preview is connected to
+      // a database that has not applied the additive media migration yet.
+      const legacySave = await supabase.from('profiles').upsert({
+        id: user.id,
+        username: cleanUsername,
+        display_name: profileName.trim(),
+        bio: bio.trim(),
+        avatar_url: avatarUrl.trim(),
+      });
+      error = legacySave.error;
+      savedWithoutMediaColumns = !error;
+    }
+    if (error) {
+      setProfileMessage(error.code === '23505' ? 'Username sudah dipakai. Pilih username lain.' : 'Gagal menyimpan profil. Periksa izin akses database atau migration.');
+    } else {
+      setProfileMessage(savedWithoutMediaColumns
+        ? 'Profil dasar berhasil disimpan. Sampul dan album belum bisa disimpan sampai migration media diterapkan di database ini.'
+        : 'Profil dan media berhasil disimpan.');
+      const { data, error: refreshError } = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, cover_url, album_urls, social_links, is_public, created_at, updated_at').order('created_at', { ascending: false });
+      if (!refreshError && data) setProfiles(data as CreatorProfile[]);
+      else {
+        const legacy = await supabase.from('profiles').select('id, username, display_name, bio, avatar_url, created_at').order('created_at', { ascending: false });
+        if (!legacy.error && legacy.data) {
+          setProfiles(legacy.data.map((profile) => ({ ...profile, cover_url: null, album_urls: [], social_links: {}, category: '', location: '', is_public: true, updated_at: profile.created_at })) as CreatorProfile[]);
+        }
+      }
     }
     setSavingProfile(false);
   };
+
+  const openCreatorProfile = (profile: CreatorProfile) => {
+    const url = new URL(window.location.href);
+    url.pathname = '/u/' + encodeURIComponent(profile.username);
+    url.searchParams.delete('creator');
+    window.history.pushState({}, '', url);
+    setSelectedProfile(profile);
+  };
+
+  const closeCreatorProfile = () => {
+    const url = new URL(window.location.href);
+    url.pathname = '/';
+    url.searchParams.delete('creator');
+    window.history.replaceState({}, '', url);
+    setSelectedProfile(null);
+  };
+
+  useEffect(() => {
+    const syncCreatorFromLocation = () => {
+      const queryUsername = new URLSearchParams(window.location.search).get('creator');
+      const pathMatch = window.location.pathname.match(/^\/u\/([a-z0-9_]{3,20})\/?$/i);
+      const pathUsername = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]).toLowerCase() : null;
+      const usernameFromUrl = (queryUsername || pathUsername || '').trim().toLowerCase();
+      if (!usernameFromUrl) {
+        setSelectedProfile(null);
+        return;
+      }
+      setSelectedProfile(profiles.find((profile) => profile.username === usernameFromUrl) || null);
+    };
+    window.addEventListener('popstate', syncCreatorFromLocation);
+    syncCreatorFromLocation();
+    return () => window.removeEventListener('popstate', syncCreatorFromLocation);
+  }, [profiles]);
 
   const scrollToCreators = () => {
     const elem = document.getElementById('kreator');
@@ -450,23 +717,59 @@ export function App() {
     }
   };
 
+  const overlayMode = new URLSearchParams(window.location.search).get('overlay') === '1';
+  if (overlayMode) return <OverlayView />;
+
   return (
     <>
       <header>
-        <div className="logo">✦ Dqau Donate</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span className="account" id="accountStatus">
-            {user ? user.email || 'Sudah masuk' : 'Belum masuk'}
-          </span>
-          <button
-            id="accountButton"
-            type="button"
-            disabled={loading}
-            onClick={handleAccountClick}
-          >
-            {user ? 'Keluar' : 'Masuk / Daftar'}
-          </button>
+        <div className="container header-inner">
+          <div className="logo" aria-hidden>
+            <span>✦</span>
+            <span>Dqau Donate</span>
+          </div>
+
+          <nav className="nav" aria-label="Main navigation">
+            <a href="#kreator">Kreator</a>
+            <a href="#komunitas">Komunitas</a>
+            <a href="#cards">Daftar</a>
+          </nav>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="account" id="accountStatus" aria-live="polite">
+              {user ? user.email || 'Sudah masuk' : 'Belum masuk'}
+            </div>
+
+            <button
+              className="btn btn-primary"
+              id="accountButton"
+              type="button"
+              disabled={loading}
+              onClick={handleAccountClick}
+            >
+              {user ? 'Keluar' : 'Masuk / Daftar'}
+            </button>
+
+            <button
+              className="menu-toggle"
+              aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+              onClick={() => setIsMenuOpen(v => !v)}
+            >
+              ☰
+            </button>
+          </div>
         </div>
+
+        {isMenuOpen && (
+          <div style={{ padding: '8px 5%', borderTop: '1px solid rgba(255,255,255,0.02)', background: 'rgba(0,0,0,0.35)' }}>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <a href="#kreator" onClick={() => setIsMenuOpen(false)}>Kreator</a>
+              <a href="#komunitas" onClick={() => setIsMenuOpen(false)}>Komunitas</a>
+              <a href="#cards" onClick={() => setIsMenuOpen(false)}>Daftar</a>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main>
@@ -474,7 +777,7 @@ export function App() {
           <small>✦ RUANG UNTUK PARA KREATOR</small>
           <h1>Apresiasi karya.<br />Dukung kreator.</h1>
           <p>Temukan kreator favoritmu dan tunjukkan dukungan untuk karya mereka.</p>
-          <button type="button" onClick={scrollToCreators}>
+          <button className="btn btn-primary" type="button" onClick={scrollToCreators}>
             Jelajahi kreator ↓
           </button>
         </section>
@@ -490,38 +793,128 @@ export function App() {
           placeholder="Cari nama atau kategori kreator..."
         />
 
-        {user && <section className="profile-editor">
-          <h3>Profil kreator kamu</h3><p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
-          <form onSubmit={saveProfile}>
-            <label htmlFor="creatorDisplayName">Nama tampilan</label><input id="creatorDisplayName" value={profileName} onChange={e => setProfileName(e.target.value)} maxLength={60} placeholder="Nama yang akan ditampilkan" />
-            <label htmlFor="creatorUsername">Username unik</label><input id="creatorUsername" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={24} placeholder="username_kamu" />
-            <label htmlFor="creatorBio">Bio</label><textarea id="creatorBio" value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={3} placeholder="Ceritakan tentang karya kamu" />
+        {user && (
+          <section className="profile-editor">
+            <h3>Profil kreator kamu</h3>
+            <p>Profil ini disimpan ke database dan ditampilkan kepada pengunjung.</p>
+            <form onSubmit={saveProfile}>
+              <label htmlFor="creatorDisplayName">Nama tampilan</label>
+              <input
+                id="creatorDisplayName"
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                maxLength={40}
+                required
+                placeholder="Nama yang terlihat di profil"
+              />
 
-            <label htmlFor="creatorAvatar">Foto profil (unggah)</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
-              {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="preview" /> : <div className="avatar">👤</div>}
-              <div style={{ flex: 1 }}>
-                <input id="creatorAvatar" type="file" accept="image/*" onChange={handleAvatarFileChange} />
-                <div style={{ marginTop: 6 }}>
-                  <small style={{ color: '#aaa3bd' }}>{avatarUploading ? 'Mengunggah avatar…' : 'Pilih gambar JPG/PNG maksimal 2MB'}</small>
+              <label htmlFor="creatorUsername">Username unik</label>
+              <input
+                id="creatorUsername"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+                minLength={3}
+                maxLength={20}
+                placeholder="username_kamu"
+              />
+
+              <label htmlFor="creatorBio">Bio</label>
+              <textarea
+                id="creatorBio"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                maxLength={300}
+                rows={3}
+                placeholder="Ceritakan tentang karya kamu"
+              />
+
+              <label htmlFor="creatorCategory">Kategori kreator</label>
+              <input id="creatorCategory" value={creatorCategory} onChange={(event) => setCreatorCategory(event.target.value)} maxLength={60} placeholder="Misalnya gamer, ilustrator, musik" />
+
+              <label htmlFor="creatorLocation">Lokasi (opsional)</label>
+              <input id="creatorLocation" value={creatorLocation} onChange={(event) => setCreatorLocation(event.target.value)} maxLength={80} placeholder="Kota atau wilayah yang ingin ditampilkan" />
+
+              <label>Link sosial (opsional)</label>
+              <div className="creator-social-editor-grid">
+                {([
+                  ['website', 'Website / portofolio'],
+                  ['instagram', 'Instagram'],
+                  ['tiktok', 'TikTok'],
+                  ['youtube', 'YouTube'],
+                ] as const).map(([key, label]) => (
+                  <div key={key}>
+                    <label htmlFor={'creatorLink-' + key}>{label}</label>
+                    <input id={'creatorLink-' + key} type="url" value={socialLinks[key] || ''} onChange={(event) => setSocialLinks((current) => ({ ...current, [key]: event.target.value }))} maxLength={300} placeholder={key === 'website' ? 'https://website-kamu.com' : 'https://' + key + '.com/username'} />
+                  </div>
+                ))}
+              </div>
+
+              <label htmlFor="creatorAvatar">Foto profil</label>
+              <div className="media-editor-row">
+                {avatarPreview ? <img className="creator-avatar-image" src={avatarPreview} alt="Pratinjau foto profil" /> : <div className="avatar">👤</div>}
+                <div className="media-editor-control">
+                  <input id="creatorAvatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleAvatarFileChange} disabled={avatarUploading} />
+                  <small>{avatarUploading ? 'Mengunggah foto profil…' : 'JPG/PNG/WebP/GIF/AVIF · maksimal 2MB'}</small>
                 </div>
               </div>
-            </div>
 
-            <button type="submit" disabled={savingProfile}>{savingProfile ? 'Menyimpan…' : 'Simpan profil'}</button>
-            {profileMessage && <p className="message" role="status">{profileMessage}</p>}
-          </form>
-        </section>}
+              <label htmlFor="creatorCover">Foto sampul profil</label>
+              <div className="cover-editor-preview">
+                {coverPreview ? <img src={coverPreview} alt="Pratinjau sampul profil" /> : <span>✦ Sampul profil kreator</span>}
+              </div>
+              <input id="creatorCover" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleCoverFileChange} disabled={coverUploading} />
+              <small className="media-editor-help">{coverUploading ? 'Mengunggah foto sampul…' : 'Foto lebar ditampilkan di bagian atas profil · maksimal 5MB'}</small>
+
+              <label htmlFor="creatorAlbum">Album foto kreator</label>
+              <input id="creatorAlbum" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleAlbumFilesChange} disabled={albumUploading || albumUrls.length >= 9} />
+              <small className="media-editor-help">{albumUploading ? 'Mengunggah foto album…' : `${albumUrls.length}/9 foto · JPG/PNG/WebP/GIF/AVIF · maksimal 5MB per foto`}</small>
+              {albumUrls.length > 0 && (
+                <div className="album-editor-grid">
+                  {albumUrls.map((url, index) => (
+                    <div className="album-editor-item" key={url}>
+                      <img src={url} alt={`Foto album ${index + 1}`} />
+                      <button className="album-remove-button" type="button" onClick={() => removeAlbumPhoto(url)} aria-label={`Hapus foto album ${index + 1}`}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button className="btn btn-primary" type="submit" disabled={savingProfile || avatarUploading || coverUploading || albumUploading}>{savingProfile ? 'Menyimpan…' : (avatarUploading || coverUploading || albumUploading) ? 'Menunggu unggahan selesai…' : 'Simpan profil'}</button>
+              {profileMessage && <p className="message" role="status">{profileMessage}</p>}
+            </form>
+            <CreatorDashboard
+              profileId={user.id}
+              profile={profiles.find((item) => item.id === user.id) || null}
+              onOpenProfile={() => {
+                const ownProfile = profiles.find((item) => item.id === user.id);
+                if (ownProfile) openCreatorProfile(ownProfile);
+              }}
+            />
+            <OverlaySettings userId={user.id} username={username || user.email || user.id} />
+          </section>
+        )}
+
+        {profileLoadMessage && <p className="schema-compatibility-note" role="status">{profileLoadMessage}</p>}
         <section className="cards" id="cards">
-          {profileLoading ? <p style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
+          {profileLoading ? <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>Memuat profil kreator…</p> : filteredProfiles.map(profile => (
             <article key={profile.id} className="card creator-profile-card">
-              {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} /> : <div className="avatar">{(profile.display_name || profile.username || 'K').charAt(0).toUpperCase()}</div>}
-              <h3>{profile.display_name || profile.username}</h3><span className="tag">@{profile.username}</span>
-              <p>{profile.bio || 'Bio belum ditambahkan.'}</p>
-              <button type="button" onClick={() => setSelectedProfile(profile)}>Lihat profil</button>
+              <div className="creator-card-cover">
+                {profile.cover_url ? <img src={profile.cover_url} alt="" loading="lazy" /> : <div className="creator-card-cover-placeholder"><span>✦</span></div>}
+              </div>
+              <div className="creator-card-content">
+                {profile.avatar_url ? <img className="creator-avatar-image" src={profile.avatar_url} alt={profile.display_name || profile.username} loading="lazy" /> : <div className="avatar creator-card-avatar">{(profile.display_name || profile.username || '').charAt(0).toUpperCase()}</div>}
+                <h3>{profile.display_name || profile.username}</h3>
+                <span className="tag">@{profile.username}</span>
+                <p>{profile.bio || 'Kreator ini belum menambahkan bio.'}</p>
+                <div className="creator-card-actions">
+                  <span className="creator-card-media-count">{profile.album_urls?.length || 0} foto album</span>
+                  <button className="btn btn-ghost" type="button" onClick={() => openCreatorProfile(profile)}>Lihat profil</button>
+                </div>
+              </div>
             </article>
           ))}
-          {!profileLoading && filteredProfiles.length === 0 && <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'24px'}}>
+          {!profileLoading && filteredProfiles.length === 0 && <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px' }}>
             <h3>{search ? 'Profil tidak ditemukan' : 'Belum ada profil kreator'}</h3>
             <p>{search ? 'Coba kata kunci lain.' : 'Profil nyata akan muncul setelah kreator mendaftar dan menyimpan profilnya. Tidak ada kartu contoh.'}</p>
           </div>}
@@ -551,7 +944,7 @@ export function App() {
         </section>
 
         <p className="notice">
-          Informasi: login dan pendaftaran akun tersedia setelah konfigurasi Supabase. Profil kreator, donasi QRIS/e-wallet, dan pencairan dana belum aktif. Jangan mengirim uang melalui halaman ini sampai integrasi pembayaran disiapkan.
+          Informasi: pembayaran baru bisa diproses setelah kredensial Midtrans Sandbox dikonfigurasi. Jangan transfer uang secara manual atau menganggap redirect checkout sebagai bukti pembayaran.
         </p>
       </main>
 
@@ -559,7 +952,6 @@ export function App() {
         © 2026 Dqau Donate · Dibuat untuk mendukung kreativitas.
       </footer>
 
-      {/* Auth Modal */}
       {modalOpen && (
         <div
           className="modal"
@@ -593,8 +985,8 @@ export function App() {
                 : authMode === 'signup' ? 'Buat akun Dqau Donate' : 'Masuk ke Dqau Donate'}
             </h2>
             <p id="authSubtitle">
-              {showPasswordUpdate ? 'Gunakan kata sandi baru untuk memulihkan akunmu.'
-                : showPasswordReset ? 'Masukkan email akunmu. Kami akan mengirim tautan pemulihan.'
+              {showPasswordUpdate ? 'Gunakan kata sandi baru yang kuat untuk akunmu.'
+                : showPasswordReset ? 'Kami akan mengirim tautan pemulihan jika email terdaftar.'
                 : authMode === 'signup' ? 'Daftar dengan email dan kata sandi.'
                 : 'Masuk menggunakan akun yang sudah terdaftar.'}
             </p>
@@ -608,6 +1000,7 @@ export function App() {
                     type="email"
                     autoComplete="email"
                     required
+                    autoFocus
                     placeholder="nama@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -653,13 +1046,14 @@ export function App() {
                 className="message"
                 id="authMessage"
                 role="status"
+                aria-live="polite"
                 style={{ color: authMessage.isError ? '#ffaaa9' : '#c7b3ff' }}
               >
                 {authMessage.text}
               </p>
 
               <div className="actions">
-                <button type="submit" id="submitAuth" disabled={loading}>
+                <button className="btn btn-primary" type="submit" id="submitAuth" disabled={loading}>
                   {loading ? 'Memproses…'
                     : showPasswordUpdate ? 'Simpan kata sandi'
                     : showPasswordReset ? 'Kirim tautan pemulihan'
@@ -668,7 +1062,7 @@ export function App() {
                 {!showPasswordReset && !showPasswordUpdate && (
                   <button
                     type="button"
-                    className="secondary"
+                    className="btn btn-ghost"
                     id="switchMode"
                     disabled={loading}
                     onClick={() => {
@@ -684,49 +1078,23 @@ export function App() {
               {!showPasswordUpdate && (
                 <div className="auth-support-actions">
                   {showPasswordReset ? (
-                    <button
-                      type="button"
-                      className="auth-text-button"
-                      disabled={loading}
-                      onClick={() => {
-                        setShowPasswordReset(false);
-                        setAuthMode('login');
-                        setAuthMessage({ text: '', isError: false });
-                      }}
-                    >
-                      Kembali ke masuk
-                    </button>
-                  ) : (
+                    <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
+                      setShowPasswordReset(false);
+                      setAuthMode('login');
+                      setAuthMessage({ text: '', isError: false });
+                    }}>Kembali ke masuk</button>
+                  ) : showPasswordUpdate ? null : authMode === 'login' ? (
                     <>
-                      {authMode === 'login' && (
-                        <button
-                          type="button"
-                          className="auth-text-button"
-                          disabled={loading}
-                          onClick={() => {
-                            setShowPasswordReset(true);
-                            setShowPhoneAuth(false);
-                            setAuthMessage({ text: '', isError: false });
-                          }}
-                        >
-                          Lupa kata sandi?
-                        </button>
-                      )}
-                      {(authMode === 'login' || confirmationPending) && (
-                        <button
-                          type="button"
-                          className="auth-text-button"
-                          id="resendConfirmation"
-                          disabled={loading || resendCooldown > 0}
-                          onClick={() => void handleResendConfirmation()}
-                        >
-                          {resendCooldown > 0
-                            ? `Kirim ulang email konfirmasi (${resendCooldown} dtk)`
-                            : 'Kirim ulang email konfirmasi'}
-                        </button>
-                      )}
+                      <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
+                        setShowPasswordReset(true);
+                        setShowPhoneAuth(false);
+                        setAuthMessage({ text: '', isError: false });
+                      }}>Lupa kata sandi?</button>
+                      <button type="button" className="auth-text-button" disabled={loading || resendCooldown > 0} onClick={() => void handleResendConfirmation()}>
+                        {resendCooldown > 0 ? `Kirim ulang konfirmasi (${resendCooldown} dtk)` : 'Kirim ulang email konfirmasi'}
+                      </button>
                     </>
-                  )}
+                  ) : null}
                 </div>
               )}
             </form>
@@ -737,7 +1105,7 @@ export function App() {
               <div className="social-grid">
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('google')}
                 >
@@ -745,7 +1113,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('facebook')}
                 >
@@ -753,7 +1121,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   disabled={loading}
                   onClick={() => handleOAuth('tiktok')}
                 >
@@ -761,7 +1129,7 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn btn-ghost"
                   id="showPhoneAuth"
                   onClick={() => {
                     setShowPhoneAuth(true);
@@ -794,6 +1162,7 @@ export function App() {
                     id="sendPhoneCode"
                     disabled={phoneLoading}
                     onClick={handleSendPhoneCode}
+                    className="btn btn-primary"
                   >
                     Kirim kode SMS
                   </button>
@@ -814,12 +1183,13 @@ export function App() {
                     id="verifyPhoneCode"
                     disabled={phoneLoading}
                     onClick={handleVerifyPhoneCode}
+                    className="btn btn-primary"
                   >
                     Verifikasi & masuk
                   </button>
                   <button
                     type="button"
-                    className="secondary"
+                    className="btn btn-ghost"
                     id="hidePhoneAuth"
                     onClick={() => {
                       setShowPhoneAuth(false);
@@ -845,27 +1215,19 @@ export function App() {
       )}
 
       {selectedProfile && (
-        <div
-          className="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="creatorDialogTitle"
-          onClick={() => setSelectedProfile(null)}
-        >
-          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            {selectedProfile.avatar_url ? <img className="creator-avatar-image profile-detail-avatar" src={selectedProfile.avatar_url} alt={selectedProfile.username} /> : <div className="avatar" style={{width:88,height:88,borderRadius:18,display:'grid',placeItems:'center'}}>👤</div>}
-            <h3 id="creatorDialogTitle">{selectedProfile.display_name || selectedProfile.username}</h3>
-            <span className="tag">@{selectedProfile.username}</span>
-            <p>{selectedProfile.bio || "Kreator ini belum menambahkan bio."}</p>
-            <p>Ini profil kreator dari database Dqua Donate. Album, postingan, dan donasi belum tersedia di halaman ini.</p>
-            <button type="button" onClick={() => setSelectedProfile(null)}>
-              Mengerti
-            </button>
-          </div>
-        </div>
+        <CreatorSocialProfile
+          profile={selectedProfile}
+          viewerId={user?.id || null}
+          viewerHasProfile={Boolean(user && profiles.some((item) => item.id === user.id))}
+          onClose={closeCreatorProfile}
+          onNeedLogin={() => {
+            setAuthMode('login');
+            setAuthMessage({ text: '', isError: false });
+            setShowPhoneAuth(false);
+            setModalOpen(true);
+          }}
+        />
       )}
-
-      {/* Alert modal (replaces window.alert for clean iframe compliance) */}
       {alertInfo && (
         <div
           className="modal"
@@ -876,7 +1238,7 @@ export function App() {
           <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Pemberitahuan</h3>
             <p>{alertInfo}</p>
-            <button type="button" onClick={() => setAlertInfo(null)}>
+            <button className="btn btn-primary" type="button" onClick={() => setAlertInfo(null)}>
               Mengerti
             </button>
           </div>
