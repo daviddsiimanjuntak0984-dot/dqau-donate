@@ -1,3 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS private;
+
 -- Add platform commission accounting to the existing donation transaction table.
 -- Additive migration: does not delete or alter legacy public.donations rows.
 -- No payout/withdrawal is enabled by this schema change.
