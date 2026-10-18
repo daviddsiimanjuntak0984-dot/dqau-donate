@@ -40,6 +40,8 @@ Recommended Pages settings:
 
 See [Cloudflare Pages deployment and diagnostics](docs/CLOUDFLARE_PAGES.md).
 
+For Supabase Auth email confirmation, resend-confirmation, and password recovery using Resend SMTP, see [Email verification with Resend](docs/EMAIL_VERIFICATION_RESEND.md). For donation feature gating and 5% commission accounting, see [Donation and overlay setup](docs/DONATIONS_SETUP.md).
+
 ## Local development and checks
 
 ```bash
