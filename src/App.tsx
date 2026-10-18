@@ -230,7 +230,7 @@ export function App() {
 
   const handleResendConfirmation = async () => {
     const emailValue = email.trim();
-    if (!emailValue || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(emailValue)) {
+    if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
       setAuthMessage({ text: 'Masukkan alamat email yang valid terlebih dahulu.', isError: true });
       return;
     }
