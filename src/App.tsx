@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured, missingEnvVars } from './supabase';
 import type { User } from '@supabase/supabase-js';
 import { OverlaySettings, OverlayView } from './overlay';
 import { CreatorDashboard, CreatorSocialProfile } from './CreatorSocial';
+import { PublicFeed } from './PublicFeed';
 
 interface CreatorProfile {
   id: string;
@@ -547,6 +548,12 @@ export function App() {
     }
   };
 
+  const handleAvatarFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) await uploadAvatar(file);
+  };
+
   const handleCoverFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -580,59 +587,44 @@ export function App() {
       input.value = '';
       return;
     }
+    const accepted = selectedFiles.slice(0, remainingSlots);
     if (selectedFiles.length > remainingSlots) {
-      setProfileMessage(`Album hanya menerima 9 foto. Maksimal ${remainingSlots} foto lagi yang akan diunggah.`);
+      setProfileMessage(`Hanya ${remainingSlots} slot album tersisa; sisanya dilewati.`);
     }
     setAlbumUploading(true);
+    setProfileMessage(`Mengunggah ${accepted.length} foto album…`);
     void (async () => {
-      const uploaded: string[] = [];
-      for (const file of selectedFiles.slice(0, remainingSlots)) {
+      const uploadedUrls: string[] = [];
+      for (const file of accepted) {
         const url = await uploadCreatorMedia(file, 'album');
-        if (url) uploaded.push(url);
+        if (url) uploadedUrls.push(url);
       }
-      if (uploaded.length) {
-        setAlbumUrls((current) => [...current, ...uploaded].slice(0, 9));
-        setProfileMessage(`${uploaded.length} foto album berhasil diunggah. Simpan perubahan profil.`);
+      if (uploadedUrls.length) {
+        setAlbumUrls((current) => [...current, ...uploadedUrls].slice(0, 9));
+        setProfileMessage(`${uploadedUrls.length} foto album berhasil diunggah. Simpan perubahan profil.`);
+      } else {
+        setProfileMessage('Tidak ada foto album yang berhasil diunggah. Periksa ukuran dan format berkas.');
       }
-      setAlbumUploading(false);
       input.value = '';
+      setAlbumUploading(false);
     })();
   };
 
   const removeAlbumPhoto = (url: string) => {
     setAlbumUrls((current) => current.filter((item) => item !== url));
-    setProfileMessage('Foto dihapus dari daftar album. Simpan profil untuk menyimpan perubahan.');
   };
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files && e.target.files[0];
-    if (f) {
-      const reader = new FileReader();
-      reader.onload = () => setAvatarPreview(String(reader.result));
-      reader.readAsDataURL(f);
-      void uploadAvatar(f);
-    }
-  };
-
-  const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!user) return;
-    if (!profileName.trim() || profileName.trim().length > 40) {
-      setProfileMessage('Nama tampilan wajib diisi dan maksimal 40 karakter.');
-      return;
-    }
-    if (bio.trim().length > 300) {
-      setProfileMessage('Bio maksimal 300 karakter.');
-      return;
-    }
-    const cleanUsername = username.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-      setProfileMessage('Username harus 3–20 karakter: huruf kecil, angka, atau garis bawah.');
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (cleanUsername.length < 3 || cleanUsername.length > 20) {
+      setProfileMessage('Username harus 3-20 karakter (huruf, angka, garis bawah).');
       return;
     }
     setSavingProfile(true);
     setProfileMessage('');
-    let { error } = await supabase.from('profiles').upsert({
+    const { error } = await supabase.from('profiles').upsert({
       id: user.id,
       username: cleanUsername,
       display_name: profileName.trim(),
@@ -783,6 +775,10 @@ export function App() {
         </section>
 
         <h2 className="section-title" id="kreator">Temukan kreator</h2>
+        <PublicFeed user={user} onNeedLogin={() => handleAccountClick()} onOpenCreator={(username) => {
+          const target = profiles.find((item) => item.username === username);
+          if (target) openCreatorProfile(target);
+        }} />
         <p>Dukungan kecil bisa berarti besar.</p>
         <input
           className="search"
@@ -1078,138 +1074,92 @@ export function App() {
               {!showPasswordUpdate && (
                 <div className="auth-support-actions">
                   {showPasswordReset ? (
-                    <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
-                      setShowPasswordReset(false);
-                      setAuthMode('login');
-                      setAuthMessage({ text: '', isError: false });
-                    }}>Kembali ke masuk</button>
-                  ) : showPasswordUpdate ? null : authMode === 'login' ? (
-                    <>
-                      <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
-                        setShowPasswordReset(true);
-                        setShowPhoneAuth(false);
+                    <button
+                      type="button"
+                      className="btn btn-ghost auth-link-button"
+                      onClick={() => {
+                        setShowPasswordReset(false);
                         setAuthMessage({ text: '', isError: false });
-                      }}>Lupa kata sandi?</button>
-                      <button type="button" className="auth-text-button" disabled={loading || resendCooldown > 0} onClick={() => void handleResendConfirmation()}>
-                        {resendCooldown > 0 ? `Kirim ulang konfirmasi (${resendCooldown} dtk)` : 'Kirim ulang email konfirmasi'}
-                      </button>
-                    </>
-                  ) : null}
+                      }}
+                    >
+                      ← Kembali ke masuk
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost auth-link-button"
+                      onClick={() => {
+                        setShowPasswordReset(true);
+                        setAuthMessage({ text: '', isError: false });
+                      }}
+                    >
+                      Lupa kata sandi?
+                    </button>
+                  )}
+                  {authMode === 'login' && !showPasswordReset && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost auth-link-button"
+                      disabled={resendCooldown > 0 || loading}
+                      onClick={() => void handleResendConfirmation()}
+                    >
+                      {resendCooldown > 0 ? `Kirim ulang konfirmasi (${resendCooldown}s)` : 'Kirim ulang email konfirmasi'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!showPasswordReset && !showPasswordUpdate && (
+                <>
+                  <div className="oauth-row">
+                    <button type="button" className="btn btn-ghost" onClick={() => handleOAuth('google')} disabled={loading}>Google</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => handleOAuth('facebook')} disabled={loading}>Facebook</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => handleOAuth('tiktok')} disabled={loading}>TikTok</button>
+                  </div>
+                  <button type="button" className="btn btn-ghost auth-link-button" onClick={() => setShowPhoneAuth(v => !v)}>
+                    {showPhoneAuth ? 'Sembunyikan login nomor HP' : 'Masuk dengan nomor HP'}
+                  </button>
+                </>
+              )}
+
+              {showPhoneAuth && !showPasswordReset && !showPasswordUpdate && (
+                <div className="phone-auth-panel">
+                  <label htmlFor="phoneNumber">Nomor HP (format internasional)</label>
+                  <input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+62812xxxxxxxx"
+                    disabled={phoneLoading}
+                  />
+                  <button type="button" className="btn btn-ghost" onClick={handleSendPhoneCode} disabled={phoneLoading}>
+                    {phoneLoading ? 'Mengirim…' : 'Kirim kode SMS'}
+                  </button>
+                  <label htmlFor="phoneCode">Kode verifikasi</label>
+                  <input
+                    id="phoneCode"
+                    inputMode="numeric"
+                    value={phoneCode}
+                    onChange={(e) => setPhoneCode(e.target.value)}
+                    placeholder="6 digit kode"
+                    disabled={phoneLoading}
+                  />
+                  <button type="button" className="btn btn-primary" onClick={handleVerifyPhoneCode} disabled={phoneLoading}>
+                    {phoneLoading ? 'Memverifikasi…' : 'Verifikasi & masuk'}
+                  </button>
                 </div>
               )}
             </form>
+          </div>
+        </div>
+      )}
 
-            {!showPasswordReset && !showPasswordUpdate && (
-            <div className="social-auth">
-              <div className="or-divider">atau lanjutkan dengan</div>
-              <div className="social-grid">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={loading}
-                  onClick={() => handleOAuth('google')}
-                >
-                  Google
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={loading}
-                  onClick={() => handleOAuth('facebook')}
-                >
-                  Facebook
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={loading}
-                  onClick={() => handleOAuth('tiktok')}
-                >
-                  TikTok
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  id="showPhoneAuth"
-                  onClick={() => {
-                    setShowPhoneAuth(true);
-                    setAuthMessage({
-                      text: 'Masukkan nomor HP dengan kode negara, misalnya +62.',
-                      isError: false,
-                    });
-                  }}
-                >
-                  Nomor HP
-                </button>
-              </div>
-            </div>
-            )}
-
-            {showPhoneAuth && !showPasswordReset && !showPasswordUpdate && (
-              <section id="phoneAuthPanel">
-                <label htmlFor="phoneNumber">Nomor HP (format internasional, contoh +62812...)</label>
-                <input
-                  id="phoneNumber"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="+62812..."
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-                <div className="actions">
-                  <button
-                    type="button"
-                    id="sendPhoneCode"
-                    disabled={phoneLoading}
-                    onClick={handleSendPhoneCode}
-                    className="btn btn-primary"
-                  >
-                    Kirim kode SMS
-                  </button>
-                </div>
-
-                <label htmlFor="phoneCode">Kode verifikasi SMS</label>
-                <input
-                  id="phoneCode"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="Masukkan kode OTP"
-                  value={phoneCode}
-                  onChange={(e) => setPhoneCode(e.target.value)}
-                />
-                <div className="actions">
-                  <button
-                    type="button"
-                    id="verifyPhoneCode"
-                    disabled={phoneLoading}
-                    onClick={handleVerifyPhoneCode}
-                    className="btn btn-primary"
-                  >
-                    Verifikasi & masuk
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    id="hidePhoneAuth"
-                    onClick={() => {
-                      setShowPhoneAuth(false);
-                      setAuthMessage({ text: '', isError: false });
-                    }}
-                  >
-                    Kembali
-                  </button>
-                </div>
-                <p className="muted-note">
-                  Nomor HP perlu layanan SMS yang aktif di Supabase. Biaya SMS dari penyedia dapat berlaku.
-                </p>
-              </section>
-            )}
-
-            {!showPasswordReset && !showPasswordUpdate && (
-              <p className="muted-note">
-                Jangan gunakan kata sandi yang sama dengan akun penting kamu. Login sosial perlu diaktifkan di Supabase terlebih dahulu.
-              </p>
-            )}
+      {alertInfo && (
+        <div className="modal" role="alertdialog" aria-modal="true" aria-live="assertive" onClick={() => setAlertInfo(null)}>
+          <div className="dialog">
+            <p className="message" role="status">{alertInfo}</p>
+            <button className="btn btn-primary" type="button" onClick={() => setAlertInfo(null)}>Tutup</button>
           </div>
         </div>
       )}
@@ -1218,32 +1168,17 @@ export function App() {
         <CreatorSocialProfile
           profile={selectedProfile}
           viewerId={user?.id || null}
-          viewerHasProfile={Boolean(user && profiles.some((item) => item.id === user.id))}
+          viewerHasProfile={profiles.some((item) => item.id === user?.id)}
           onClose={closeCreatorProfile}
           onNeedLogin={() => {
+            closeCreatorProfile();
             setAuthMode('login');
-            setAuthMessage({ text: '', isError: false });
-            setShowPhoneAuth(false);
             setModalOpen(true);
           }}
         />
       )}
-      {alertInfo && (
-        <div
-          className="modal"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setAlertInfo(null)}
-        >
-          <div className="alert-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Pemberitahuan</h3>
-            <p>{alertInfo}</p>
-            <button className="btn btn-primary" type="button" onClick={() => setAlertInfo(null)}>
-              Mengerti
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
+
+export default App;
