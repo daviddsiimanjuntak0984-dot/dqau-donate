@@ -113,6 +113,10 @@ export function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState<{ text: string; isError: boolean }>({ text: '', isError: false });
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showPasswordUpdate, setShowPasswordUpdate] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showPhoneAuth, setShowPhoneAuth] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -189,8 +193,18 @@ export function App() {
       setUser(session?.user || null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null);
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowPasswordReset(false);
+        setShowPasswordUpdate(true);
+        setShowPhoneAuth(false);
+        setAuthMode('login');
+        setPassword('');
+        setConfirmPassword('');
+        setAuthMessage({ text: 'Buat kata sandi baru untuk akunmu.', isError: false });
+        setModalOpen(true);
+      }
     });
 
     return () => {
@@ -272,17 +286,45 @@ export function App() {
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      setAuthMessage({ text: 'Login belum tersedia karena konfigurasi publik Supabase belum dapat dibaca. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Periksa log build yang hanya mencantumkan nama variabel, serta konfigurasi Pages Production/Preview. Nilai konfigurasi tidak ditampilkan.', isError: true });
+      setAuthMessage({ text: 'Autentikasi belum tersedia karena konfigurasi Supabase belum lengkap. Variabel yang hilang atau tidak valid: ' + (missingEnvVars.join(', ') || 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY') + '. Nilai konfigurasi tidak ditampilkan.', isError: true });
       return;
     }
+
+    if (!email.trim() && (showPasswordReset || (!showPasswordUpdate && !showPhoneAuth))) {
+      setAuthMessage({ text: 'Masukkan alamat email terlebih dahulu.', isError: true });
+      return;
+    }
+    if (showPasswordUpdate && (password.length < 6 || password !== confirmPassword)) {
+      setAuthMessage({ text: password.length < 6 ? 'Kata sandi baru minimal 6 karakter.' : 'Konfirmasi kata sandi belum sama.', isError: true });
+      return;
+    }
+
     setLoading(true);
     setAuthMessage({
-      text: authMode === 'signup' ? 'Membuat akun...' : 'Memeriksa akun...',
+      text: showPasswordReset ? 'Meminta tautan pemulihan…'
+        : showPasswordUpdate ? 'Memperbarui kata sandi…'
+        : authMode === 'signup' ? 'Membuat akun…' : 'Memeriksa akun…',
       isError: false,
     });
 
     try {
-      if (authMode === 'signup') {
+      if (showPasswordReset) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+        setAuthMessage({
+          text: 'Jika alamat email terdaftar, tautan pemulihan akan dikirim. Periksa kotak masuk dan folder spam.',
+          isError: false,
+        });
+      } else if (showPasswordUpdate) {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setShowPasswordUpdate(false);
+        setPassword('');
+        setConfirmPassword('');
+        setAuthMessage({ text: 'Kata sandi berhasil diperbarui. Silakan masuk dengan kata sandi baru.', isError: false });
+      } else if (authMode === 'signup') {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -291,17 +333,12 @@ export function App() {
         if (error) throw error;
         if (!data.session) {
           setAuthMessage({
-            text: 'Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.',
+            text: 'Jika pendaftaran diterima, email konfirmasi akan dikirim. Periksa kotak masuk dan folder spam sebelum masuk.',
             isError: false,
           });
         } else {
-          setAuthMessage({
-            text: 'Akun berhasil dibuat dan kamu sudah masuk.',
-            isError: false,
-          });
-          setTimeout(() => {
-            setModalOpen(false);
-          }, 900);
+          setAuthMessage({ text: 'Akun berhasil dibuat dan kamu sudah masuk.', isError: false });
+          setTimeout(() => setModalOpen(false), 900);
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -309,17 +346,61 @@ export function App() {
           password,
         });
         if (error) throw error;
-        setAuthMessage({
-          text: 'Berhasil masuk.',
-          isError: false,
-        });
-        setTimeout(() => {
-          setModalOpen(false);
-        }, 900);
+        setAuthMessage({ text: 'Berhasil masuk.', isError: false });
+        setTimeout(() => setModalOpen(false), 900);
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
+      const rawMessage = err instanceof Error ? err.message : '';
+      const lower = rawMessage.toLowerCase();
+      let errorMessage = 'Terjadi kesalahan. Coba lagi.';
+      if (lower.includes('invalid login credentials')) errorMessage = 'Email atau kata sandi tidak cocok.';
+      else if (lower.includes('email not confirmed')) errorMessage = 'Email belum dikonfirmasi. Periksa email atau gunakan tombol kirim ulang konfirmasi.';
+      else if (lower.includes('password should be at least')) errorMessage = 'Kata sandi minimal 6 karakter.';
+      else if (lower.includes('rate limit') || lower.includes('too many requests')) errorMessage = 'Terlalu banyak percobaan. Tunggu sebentar sebelum mencoba lagi.';
+      else if (lower.includes('expired') || lower.includes('invalid') && lower.includes('token')) errorMessage = 'Tautan autentikasi tidak valid atau sudah kedaluwarsa. Minta tautan baru.';
+      else if (lower.includes('already registered')) errorMessage = 'Email ini mungkin sudah terdaftar. Coba masuk atau minta konfirmasi ulang.';
+      else if (rawMessage && !/key|secret|token|authorization|jwt/i.test(rawMessage)) errorMessage = rawMessage;
       setAuthMessage({ text: errorMessage, isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthMessage({ text: 'Konfirmasi email belum tersedia karena konfigurasi Supabase belum lengkap.', isError: true });
+      return;
+    }
+    const emailValue = email.trim();
+    if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+      setAuthMessage({ text: 'Masukkan alamat email yang valid terlebih dahulu.', isError: true });
+      return;
+    }
+    if (resendCooldown > 0 || loading) return;
+
+    setLoading(true);
+    setAuthMessage({ text: 'Meminta email konfirmasi…', isError: false });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: emailValue,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      setResendCooldown(60);
+      setAuthMessage({
+        text: 'Jika akun belum terverifikasi, email konfirmasi akan dikirim bila diizinkan. Periksa kotak masuk dan folder spam.',
+        isError: false,
+      });
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message.toLowerCase() : '';
+      setAuthMessage({
+        text: rawMessage.includes('rate limit') || rawMessage.includes('too many requests')
+          ? 'Permintaan email terlalu sering. Tunggu sebentar sebelum mencoba lagi.'
+          : 'Email konfirmasi belum dapat dikirim. Periksa email, konfigurasi SMTP, dan coba lagi nanti.',
+        isError: true,
+      });
+      setResendCooldown(60);
     } finally {
       setLoading(false);
     }
@@ -899,43 +980,73 @@ export function App() {
               ×
             </button>
             <h2 id="authTitle">
-              {authMode === 'signup' ? 'Buat akun Dqau Donate' : 'Masuk ke Dqau Donate'}
+              {showPasswordUpdate ? 'Buat kata sandi baru'
+                : showPasswordReset ? 'Lupa kata sandi'
+                : authMode === 'signup' ? 'Buat akun Dqau Donate' : 'Masuk ke Dqau Donate'}
             </h2>
             <p id="authSubtitle">
-              {authMode === 'signup'
-                ? 'Daftar dengan email dan kata sandi.'
+              {showPasswordUpdate ? 'Gunakan kata sandi baru yang kuat untuk akunmu.'
+                : showPasswordReset ? 'Kami akan mengirim tautan pemulihan jika email terdaftar.'
+                : authMode === 'signup' ? 'Daftar dengan email dan kata sandi.'
                 : 'Masuk menggunakan akun yang sudah terdaftar.'}
             </p>
 
             <form id="authForm" onSubmit={handleAuthSubmit}>
-              <label htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                autoFocus
-                placeholder="nama@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              {!showPasswordUpdate && (
+                <>
+                  <label htmlFor="email">Email</label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    autoFocus
+                    placeholder="nama@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
+                  />
+                </>
+              )}
 
-              <label htmlFor="password">Kata sandi (minimal 6 karakter)</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-                minLength={6}
-                required
-                placeholder="Minimal 6 karakter"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              {!showPasswordReset && (
+                <>
+                  <label htmlFor="password">{showPasswordUpdate ? 'Kata sandi baru (minimal 6 karakter)' : 'Kata sandi (minimal 6 karakter)'}</label>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete={showPasswordUpdate || authMode === 'signup' ? 'new-password' : 'current-password'}
+                    minLength={6}
+                    required
+                    placeholder="Minimal 6 karakter"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                  {showPasswordUpdate && (
+                    <>
+                      <label htmlFor="confirmPassword">Ulangi kata sandi baru</label>
+                      <input
+                        id="confirmPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={6}
+                        required
+                        placeholder="Ulangi kata sandi baru"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={loading}
+                      />
+                    </>
+                  )}
+                </>
+              )}
 
               <p
                 className="message"
                 id="authMessage"
                 role="status"
+                aria-live="polite"
                 style={{ color: authMessage.isError ? '#ffaaa9' : '#c7b3ff' }}
               >
                 {authMessage.text}
@@ -943,23 +1054,52 @@ export function App() {
 
               <div className="actions">
                 <button className="btn btn-primary" type="submit" id="submitAuth" disabled={loading}>
-                  {authMode === 'signup' ? 'Daftar' : 'Masuk'}
+                  {loading ? 'Memproses…'
+                    : showPasswordUpdate ? 'Simpan kata sandi'
+                    : showPasswordReset ? 'Kirim tautan pemulihan'
+                    : authMode === 'signup' ? 'Daftar' : 'Masuk'}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  id="switchMode"
-                  disabled={loading}
-                  onClick={() => {
-                    setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'));
-                    setAuthMessage({ text: '', isError: false });
-                  }}
-                >
-                  {authMode === 'signup' ? 'Saya sudah punya akun' : 'Buat akun'}
-                </button>
+                {!showPasswordReset && !showPasswordUpdate && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    id="switchMode"
+                    disabled={loading}
+                    onClick={() => {
+                      setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'));
+                      setAuthMessage({ text: '', isError: false });
+                    }}
+                  >
+                    {authMode === 'signup' ? 'Saya sudah punya akun' : 'Buat akun'}
+                  </button>
+                )}
               </div>
+
+              {!showPasswordUpdate && (
+                <div className="auth-support-actions">
+                  {showPasswordReset ? (
+                    <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
+                      setShowPasswordReset(false);
+                      setAuthMode('login');
+                      setAuthMessage({ text: '', isError: false });
+                    }}>Kembali ke masuk</button>
+                  ) : showPasswordUpdate ? null : authMode === 'login' ? (
+                    <>
+                      <button type="button" className="auth-text-button" disabled={loading} onClick={() => {
+                        setShowPasswordReset(true);
+                        setShowPhoneAuth(false);
+                        setAuthMessage({ text: '', isError: false });
+                      }}>Lupa kata sandi?</button>
+                      <button type="button" className="auth-text-button" disabled={loading || resendCooldown > 0} onClick={() => void handleResendConfirmation()}>
+                        {resendCooldown > 0 ? `Kirim ulang konfirmasi (${resendCooldown} dtk)` : 'Kirim ulang email konfirmasi'}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              )}
             </form>
 
+            {!showPasswordReset && !showPasswordUpdate && (
             <div className="social-auth">
               <div className="or-divider">atau lanjutkan dengan</div>
               <div className="social-grid">
@@ -1003,8 +1143,9 @@ export function App() {
                 </button>
               </div>
             </div>
+            )}
 
-            {showPhoneAuth && (
+            {showPhoneAuth && !showPasswordReset && !showPasswordUpdate && (
               <section id="phoneAuthPanel">
                 <label htmlFor="phoneNumber">Nomor HP (format internasional, contoh +62812...)</label>
                 <input
@@ -1064,9 +1205,11 @@ export function App() {
               </section>
             )}
 
-            <p className="muted-note">
-              Jangan gunakan kata sandi yang sama dengan akun penting kamu. Login sosial perlu diaktifkan di Supabase terlebih dahulu.
-            </p>
+            {!showPasswordReset && !showPasswordUpdate && (
+              <p className="muted-note">
+                Jangan gunakan kata sandi yang sama dengan akun penting kamu. Login sosial perlu diaktifkan di Supabase terlebih dahulu.
+              </p>
+            )}
           </div>
         </div>
       )}
