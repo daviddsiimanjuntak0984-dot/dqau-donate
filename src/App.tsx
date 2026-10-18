@@ -696,33 +696,37 @@ export function App() {
                     >
                       Kembali ke masuk
                     </button>
-                  ) : authMode === 'login' ? (
+                  ) : (
                     <>
-                      <button
-                        type="button"
-                        className="auth-text-button"
-                        disabled={loading}
-                        onClick={() => {
-                          setShowPasswordReset(true);
-                          setShowPhoneAuth(false);
-                          setAuthMessage({ text: '', isError: false });
-                        }}
-                      >
-                        Lupa kata sandi?
-                      </button>
-                      <button
-                        type="button"
-                        className="auth-text-button"
-                        id="resendConfirmation"
-                        disabled={loading || resendCooldown > 0}
-                        onClick={() => void handleResendConfirmation()}
-                      >
-                        {resendCooldown > 0
-                          ? `Kirim ulang email konfirmasi (${resendCooldown} dtk)`
-                          : 'Kirim ulang email konfirmasi'}
-                      </button>
+                      {authMode === 'login' && (
+                        <button
+                          type="button"
+                          className="auth-text-button"
+                          disabled={loading}
+                          onClick={() => {
+                            setShowPasswordReset(true);
+                            setShowPhoneAuth(false);
+                            setAuthMessage({ text: '', isError: false });
+                          }}
+                        >
+                          Lupa kata sandi?
+                        </button>
+                      )}
+                      {(authMode === 'login' || confirmationPending) && (
+                        <button
+                          type="button"
+                          className="auth-text-button"
+                          id="resendConfirmation"
+                          disabled={loading || resendCooldown > 0}
+                          onClick={() => void handleResendConfirmation()}
+                        >
+                          {resendCooldown > 0
+                            ? `Kirim ulang email konfirmasi (${resendCooldown} dtk)`
+                            : 'Kirim ulang email konfirmasi'}
+                        </button>
+                      )}
                     </>
-                  ) : null}
+                  )}
                 </div>
               )}
             </form>
