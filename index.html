@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dqua Donate — Dukung Kreator</title>
+  <meta name="description" content="Platform apresiasi karya dan dukungan untuk para kreator Indonesia.">
+  <meta property="og:title" content="Dqua Donate — Dukung Kreator">
+  <meta property="og:description" content="Platform apresiasi karya dan dukungan untuk para kreator Indonesia.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#08070d" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>✦</text></svg>">
+  <!-- Fonts: Inter & Poppins for cyber anime social look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Poppins', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { min-height: 100%; background: #0b0912; }
+    .app-boot-loader { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #ded7ef; font: 500 14px/1.5 system-ui, sans-serif; }
+    .app-boot-spinner { width: 30px; height: 30px; border: 3px solid rgba(196,181,253,.2); border-top-color: #a78bfa; border-radius: 50%; animation: dqua-boot-spin .8s linear infinite; }
+    @keyframes dqua-boot-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .app-boot-spinner { animation: none; border-top-color: #a78bfa; } }
+  </style>
+  <meta property="og:image" content="/icon.svg">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="/icon.svg">
+</head>
+<body>
+  <div id="root">
+    <div class="app-boot-loader" role="status" aria-live="polite">
+      <span class="app-boot-spinner" aria-hidden="true"></span>
+      <p>Memuat Dqua Donate…</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
